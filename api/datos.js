@@ -83,10 +83,12 @@ module.exports = async (req, res) => {
           !ids.every((x) => typeof x === "number" || typeof x === "string")) {
         return res.status(400).json({ error: "Lista de productos inválida." });
       }
+      // fecha y precio se devuelven como texto: en el DW la fecha puede estar guardada como text.
+      // El tablero los interpreta (fechas ISO o dd/mm/aaaa, precios con punto o coma).
       const { rows } = await client.query(
         `SELECT producto_id AS id,
-                to_char(fecha, 'YYYY-MM-DD') AS f,
-                precio::float8 AS p
+                fecha::text AS f,
+                precio::text AS p
          FROM agroseries.precios
          WHERE producto_id = ANY($1)`,
         [ids]
