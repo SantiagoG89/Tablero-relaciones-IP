@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px/1.45 system-ui,sans-serif}
+img{max-width:100%}
+</style>
+<title>Relaciones de Canje Agroseries</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+[hidden]{display:none!important}
+/* Layout: barra de datos arriba, tres solapas (Foto, Película, Variación), panel principal a todo el ancho con scroll propio */
+:root{
+  --bg:#eef2f1; --surface:#ffffff; --ink:#17201e; --muted:#5a6864; --line:#d4dcd9;
+  --accent:#22507c; --accent-soft:#e1eaf3; --neg:#8a9894; --warn:#9a5b00; --warn-soft:#fbf0dc; --err:#a3241a; --empty:#e6ebe9;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"Archivo",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111615; --surface:#19201f; --ink:#e4ebe9; --muted:#93a29e; --line:#2b3533;
+  --accent:#8db6df; --accent-soft:#1d2b38; --neg:#5f6e6a; --warn:#e8b061; --warn-soft:#2e2414; --err:#ff8a7e; --empty:#232c2a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111615; --surface:#19201f; --ink:#e4ebe9; --muted:#93a29e; --line:#2b3533;
+  --accent:#8db6df; --accent-soft:#1d2b38; --neg:#5f6e6a; --warn:#e8b061; --warn-soft:#2e2414; --err:#ff8a7e; --empty:#232c2a; color-scheme:dark}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1440px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.datos{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.chip.ej{background:var(--warn-soft);color:var(--warn)}
+button,.btn{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button:hover,.btn:hover{border-color:var(--accent)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button:disabled{opacity:.6;cursor:wait}
+button.link{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 14px;font-family:var(--f-display);font-stretch:105%;font-size:15px;color:var(--muted);white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab small{font-family:var(--f-body);font-stretch:100%;font-weight:400;font-size:12px;margin-left:6px}
+.controles{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+input[type=date],input[type=month],input[type=text],input[type=password],select{font:inherit;font-family:var(--f-mono);font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);max-width:100%}
+select,input[type=text],input[type=password]{font-family:var(--f-body)}
+.sep{width:1px;align-self:stretch;background:var(--line)}
+.titulo-graf h2{font-family:var(--f-display);font-size:17px;font-weight:700;margin:0;text-wrap:balance}
+.titulo-graf p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.barra{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
+.leyenda{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.grad{width:200px;max-width:50vw;height:10px;border-radius:2px;background:linear-gradient(90deg,#006837,#1a9850,#66bd63,#a6d96a,#d9ef8b,#ffffbf,#fee08b,#fdae61,#f46d43,#d73027,#a50026)}
+.grad-w{display:flex;flex-direction:column;gap:2px}
+.grad-l{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.hm{border-collapse:separate;border-spacing:2px;font-variant-numeric:tabular-nums}
+table.hm th{font-weight:600;font-size:12px;color:var(--ink);text-align:left}
+table.hm th.rowh{position:sticky;left:0;background:var(--surface);z-index:1;padding-right:10px;white-space:nowrap;font-stretch:88%}
+table.hm thead th{vertical-align:bottom;padding-bottom:4px}
+table.hm thead th.v span{writing-mode:vertical-rl;transform:rotate(180deg);display:block;max-height:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-stretch:85%;margin:0 auto}
+table.hm thead th.h{text-align:center;font-family:var(--f-mono);font-size:11px;white-space:nowrap}
+table.hm thead th.h.foco{color:var(--accent)}
+td.c{min-width:40px;height:28px;text-align:center;font-family:var(--f-mono);font-size:11px;font-weight:600;border-radius:3px;cursor:pointer;padding:0 3px}
+td.c.na{background:var(--empty);cursor:default}
+td.c.sel{outline:2px solid var(--ink);outline-offset:1px}
+td.c.foco{box-shadow:inset 0 0 0 2px var(--accent)}
+.detalle{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;border-top:1px solid var(--line);padding-top:12px}
+@media (max-width:720px){.detalle{grid-template-columns:1fr}}
+.detalle h3{margin:0 0 6px;font-size:14px;font-weight:700}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--f-mono);text-align:right}
+.chart{min-width:0}
+.chart svg{width:100%;height:auto;display:block}
+.chart .ax{stroke:var(--line)} .chart .tx{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.chart .ln{fill:none;stroke:var(--accent);stroke-width:1.8}
+.chart .prom{stroke:var(--ink);stroke-dasharray:5 4;stroke-width:1.2}
+.chart .band{fill:var(--accent-soft)}
+.chart .mk{fill:var(--ink)} .chart .mkl{stroke:var(--ink);stroke-width:1}
+.vacio{color:var(--muted);font-size:13px}
+.avisos{display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.aviso{background:var(--warn-soft);color:var(--warn);padding:8px 10px;border-radius:6px}
+.aviso ul{margin:4px 0 0;padding-left:18px}
+/* Variación */
+.var-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.vrow{display:grid;grid-template-columns:minmax(120px,1.1fr) 2fr 64px;align-items:center;gap:10px;padding:6px 4px;border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;border-radius:0;width:100%;text-align:left;font-weight:400}
+.vrow:hover{background:var(--bg)}
+.vrow .nm{font-weight:600;font-size:13px;min-width:0}
+.vrow .nm small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.vrow .pct{font-family:var(--f-mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.vbar{position:relative;height:14px}
+.vbar .eje{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
+.vbar .b{position:absolute;top:0;height:100%;border-radius:2px;background:var(--accent)}
+.vbar .b.neg{background:var(--neg)}
+.vdet{padding:4px 4px 10px 14px;font-size:12.5px;display:flex;flex-direction:column;gap:3px}
+.vdet div{display:flex;justify-content:space-between;gap:12px}
+.vdet span:last-child{font-family:var(--f-mono);white-space:nowrap}
+.vhead{display:grid;grid-template-columns:minmax(120px,1.1fr) 2fr 64px;gap:10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:0 4px 4px}
+.vhead span:last-child{text-align:right}
+details.ayuda{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+details.ayuda summary{cursor:pointer;font-weight:700}
+details.ayuda p{max-width:72ch;color:var(--muted)}
+pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-family:var(--f-mono);font-size:12px;overflow-x:auto;margin:0}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;z-index:30;max-width:90vw}
+.carga{display:none}
+/* Ingreso */
+.login{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow:auto}
+.login form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:24px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.login h2{font-family:var(--f-display);font-stretch:110%;font-weight:800;font-size:22px;margin:0}
+.login p{margin:0;color:var(--muted);font-size:13px}
+.login .host{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.login .err{color:var(--err);font-size:13px;font-weight:600}
+.login .prog{height:6px;background:var(--empty);border-radius:3px;overflow:hidden}
+.login .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+</style>
+
+</head>
+<body>
+<div class="login" id="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <div>
+      <div class="eyebrow">Agroseries · CREA</div>
+      <h2>Ingresar a la base</h2>
+    </div>
+    <p>Usá tu usuario y contraseña MEC. Se usan solo para descargar los precios y no se guardan.</p>
+    <div class="host">dw.crea.org.ar:54322 / warehouse</div>
+    <div class="campo"><label for="lg-user">Usuario MEC</label><input type="text" id="lg-user" autocomplete="username" required></div>
+    <div class="campo"><label for="lg-pass">Contraseña MEC</label><input type="password" id="lg-pass" autocomplete="current-password" required></div>
+    <div class="err" id="lg-err" hidden></div>
+    <div id="lg-progw" hidden><div class="prog"><i id="lg-prog"></i></div><p id="lg-msg" style="margin-top:6px"></p></div>
+    <button class="primary" id="lg-btn" type="submit">Conectar y descargar datos</button>
+    <button class="link" id="lg-skip" type="button">Seguir sin conectar (datos de ejemplo o CSV)</button>
+  </form>
+</div>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Agroseries · CREA</div>
+      <h1>Relaciones de canje insumo / producto</h1>
+    </div>
+    <div class="datos">
+      <span id="chipDatos" class="chip ej">Cargando…</span>
+      <button id="btnConectar" hidden>Conectar a la base</button>
+      <label class="btn" for="archivo">Cargar CSV</label>
+      <input id="archivo" class="carga" type="file" accept=".csv,.txt,text/csv">
+      <button id="btnEjemplo" hidden>Volver a datos de ejemplo</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="foto">Foto <small>productos × insumos</small></button>
+    <button class="tab" role="tab" data-view="pelicula">Película <small>evolución por sector</small></button>
+    <button class="tab" role="tab" data-view="variacion">Variación <small>aumento por grupo</small></button>
+  </nav>
+
+  <section id="v-foto" class="vista" hidden>
+    <div class="controles">
+      <div class="campo"><label for="f-ini">Promedio desde</label><input type="date" id="f-ini"></div>
+      <div class="campo"><label for="f-fin">Promedio hasta</label><input type="date" id="f-fin"></div>
+      <div class="sep"></div>
+      <div class="campo"><label for="f-an">Fecha de la foto</label><input type="date" id="f-an"></div>
+    </div>
+  </section>
+
+  <section id="v-pelicula" class="vista" hidden>
+    <div class="controles">
+      <div class="campo"><label for="p-sec">Sector</label>
+        <select id="p-sec"><option value="agricultura">Agricultura</option><option value="lecheria">Lechería / Tambo</option><option value="ganaderia">Ganadería</option></select></div>
+      <div class="campo"><label for="p-base">Producto base</label><select id="p-base"></select></div>
+      <div class="sep"></div>
+      <div class="campo"><label for="p-ini">Promedio desde</label><input type="date" id="p-ini"></div>
+      <div class="campo"><label for="p-fin">Promedio hasta</label><input type="date" id="p-fin"></div>
+      <div class="sep"></div>
+      <div class="campo"><label for="p-an">Fecha de análisis</label><input type="date" id="p-an"></div>
+    </div>
+  </section>
+
+  <section id="v-variacion" class="vista" hidden>
+    <div class="controles">
+      <div class="campo"><label for="v-desde">Mes inicial</label><input type="month" id="v-desde"></div>
+      <div class="campo"><label for="v-hasta">Mes final</label><input type="month" id="v-hasta"></div>
+      <span class="vacio">Precios en dólar oficial. Solo cuentan los artículos con precio en los dos meses.</span>
+    </div>
+  </section>
+
+  <div class="panel" id="panelHeat">
+    <div class="barra">
+      <div class="titulo-graf"><h2 id="gTitulo"></h2><p id="gSub"></p></div>
+      <div class="leyenda">
+        <div class="grad-w"><div class="grad"></div><div class="grad-l"><span>−50%</span><span>0</span><span>+50%</span></div></div>
+        <span>Verde: el insumo cuesta menos producto que el promedio · Rojo: cuesta más</span>
+      </div>
+    </div>
+    <div class="barra">
+      <span class="vacio">Tocá una celda para ver la serie completa de esa relación.</span>
+      <div class="datos" id="botonesCopia"></div>
+    </div>
+    <div class="scroll" id="hm"></div>
+    <div class="detalle" id="detalle"></div>
+  </div>
+
+  <div class="var-grid" id="panelVar" hidden></div>
+
+  <div class="avisos" id="avisos"></div>
+
+  <details class="ayuda">
+    <summary>Datos: conexión a la base o CSV</summary>
+    <p>En la versión publicada en Vercel, el tablero pide usuario y contraseña MEC al abrir y descarga los precios directo de la base de CREA. Como alternativa, podés cargar un CSV exportado desde Colab. Después de la línea <code>df = pd.read_sql(query, engine)</code> agregá:</p>
+    <pre class="code" id="snippet">df.to_csv("agroseries.csv", index=False)
+from google.colab import files
+files.download("agroseries.csv")</pre>
+    <p><button id="copiarSnippet">Copiar código</button></p>
+    <p>El CSV necesita las columnas <code>fecha</code>, <code>precio</code>, <code>producto_nombre</code> y <code>moneda</code>. Para la solapa Variación también <code>categoria</code> y <code>subcategoria</code> (agregalas al SELECT).</p>
+  </details>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN (mismas listas que los notebooks)
+// ============================================================
+const DOLAR = "Dólar oficial";
+const INDICES_A_CONVERTIR = ["Merval","UVA","IPC (2016)","IPC (EMPALME)","Salario privado (RIPTE)"];
+
+const FOTO = {
+  insumos:["Urea","Fosfato monoamónico","Glifosato 54%","Poste quebracho colorado","Alambre 17/15 x 1.000 m Fortin","Cepo Mod. A","Gasoil agropecuario","Unidad Técnica Agrícola (UTA)","Tierra en zona de cría","Tierra en zona invernada","Tierra en zona maicera","Tierra en zona triguera","Hilux 4x4 CS DX 2.4 TDI 6 MT HAR","Segadora C400","Rotoenfardadora 561M","6170J (170 HP)","7M 230 (230 HP)","Mixer 8,5 m3, 1 eje (2913)","Valor Metro Cuadrado","Vaq. R.C. adelantadas y paridas","Flete 300 km","Empleado rural","Stinger","Coragen","2,4 D 50%","Picloram 24%","Maíz (disp.)","Sorgo forrajero","Alfalfa - Grupo 9"],
+  productos:["Ternero 160-180 kg","Novillito 260-300 kg","Vacas C. Gtía. Preñez Usada","Novillito Esp. h 390","Novillo Esp.Joven +430","Litro de leche","Ternero holando","Cebada (disp.)","Girasol (disp.)","Maíz (disp.)","Soja (disp.)","Sorgo (disp.)","Trigo (disp.)"]
+};
+
+const GRANOS = ["Cebada (disp.)","Girasol (disp.)","Maíz (disp.)","Soja (disp.)","Sorgo (disp.)","Trigo (disp.)","Cebada (ene)","Girasol (mar)","Maíz (abr)","Maíz (jul)","Soja (may)","Sorgo (abr)","Trigo (ene)"];
+
+// "bases": productos base que se pueden elegir en la Película (el primero es el default)
+const SECTORES = {
+  agricultura:{nombre:"Agrícola",bases:GRANOS,default:"Girasol (disp.)",insumos:["Fosfato monoamónico","Urea","Superfosfato simple","Flete 300 km","Gasoil agropecuario","Engeo","2,4 D 100%","Glifosato 54%","Unidad Técnica Agrícola (UTA)"]},
+  lecheria:{nombre:"Lechería / Tambo",bases:["Litro de leche"],default:"Litro de leche",insumos:["Espina de pescado 12+12","Estaca completa con balde","Electrificador picana 12 V 120 km","Hilux 4x4 DC SRV 2.8 TDI 6 AT HAR","UVA","Gasoil agropecuario","Empleado rural","Flete 300 km","Tierra en zona maicera","Balanceado Iniciador Ternero","Balanceado Pre Parto s/sales aniónicas","Balanceado Vaca Producción (16%)","Concentrado Iniciador 40% Recría 30%","Concentrado Pre Parto c/sales aniónicas","Concentrado Vaca Producción (10-20%)","Maíz (disp.)","Soja (disp.)"]},
+  ganaderia:{nombre:"Ganadería",bases:["Novillito Esp. h 390","Ternero 160-180 kg","Novillito 260-300 kg","Novillo Esp.Joven +430","Vacas C. Gtía. Preñez Usada"],default:"Novillito Esp. h 390",insumos:["Balanceado Engorde Novillo","Alfalfa - Grupo 7","Maíz (disp.)","Ternero 180-200 kg","Novillito 260-300 kg","Urea","Fosfato diamónico","Gasoil agropecuario","Unidad Técnica Agrícola (UTA)","Empleado rural","Poste quebracho colorado","Alambre 17/15 x 1.000 m Fortin","Cepo Mod. A","Tierra en zona invernada","Tierra en zona de cría","Hilux 4x4 CS DX 2.4 TDI 6 MT HAR","Segadora C400","Rotoenfardadora 461M","6170J (170 HP)","Mixer 8,5 m3, 1 eje (2913)"]}
+};
+
+// Solapa Variación (notebook de variación % por grupo)
+const VARIACION = {
+  insumos:{
+    titulo:"Insumos y servicios",
+    categorias:["Forrajeras","Camioneta","Maquinaria"],
+    subcategorias:["Herbicidas","Semilla","Fertilizante","Suplemento Alimentario","Tierra","Labores","Flete","Combustible"],
+    sueltos:["Empleado rural"]
+  },
+  productos:{
+    titulo:"Productos y hacienda",
+    individuales:["Maíz (disp.)","Soja (disp.)","Trigo (disp.)","Girasol (disp.)","Litro de leche"],
+    categoriaHacienda:"Precio Hacienda"
+  }
+};
+
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+// ============================================================
+// ESTADO
+// ============================================================
+const state = {
+  view:"foto",
+  foto:{ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-01"},
+  peli:{sector:"agricultura",base:"Girasol (disp.)",ini:"2016-06-01",fin:"2026-06-01",an:"2026-06-01"},
+  vari:{desde:"2023-11",hasta:"2026-09",abiertos:new Set()},
+  sel:null
+};
+let DB = null, RES = null, HAY_SERVIDOR = false;
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const limpiar = s => s === null || s === undefined ? "" : String(s).replace(/ /g," ").replace(/\s+/g," ").trim();
+const mean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : NaN;
+
+function parseNum(v){
+  if (v === null || v === undefined) return NaN;
+  if (typeof v === "number") return v;
+  let s = String(v).trim(); if (!s) return NaN;
+  const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+  if (lc > -1 && ld > -1) s = lc > ld ? s.replace(/\./g,"").replace(",",".") : s.replace(/,/g,"");
+  else if (lc > -1) s = s.replace(",",".");
+  const n = Number(s); return Number.isFinite(n) ? n : NaN;
+}
+function parseFecha(v){
+  const s = String(v ?? "").trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  return null;
+}
+function fmtPct(v,d=0){ return (v>0?"+":"") + v.toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d}) + "%"; }
+function fmtRel(x){
+  if (!Number.isFinite(x)) return "–";
+  const a = Math.abs(x);
+  const d = a>=100?0:a>=10?1:a>=1?2:a>=0.1?3:4;
+  return x.toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function mesLargo(ym){ const [y,m]=ym.split("-"); return `${MESES[Number(m)-1]} ${y}`; }
+function fechaLarga(f){ const [y,m,d]=f.split("-"); return `${Number(d)} de ${MESES[Number(m)-1]} de ${y}`; }
+function toast(msg){
+  const t = document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2600);
+}
+async function copiar(texto, msg){
+  try { await navigator.clipboard.writeText(texto); toast(msg); }
+  catch(e){
+    const ta=document.createElement("textarea"); ta.value=texto; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast(msg);}catch(_){ toast("No se pudo copiar"); }
+    ta.remove();
+  }
+}
+const numXL = v => v===null||v===undefined||!Number.isFinite(v) ? "" : String(Math.round(v*10000)/10000).replace(".",",");
+
+// Escala RdYlGn invertida, -50 a +50 (igual que matplotlib)
+const STOPS = ["#006837","#1a9850","#66bd63","#a6d96a","#d9ef8b","#ffffbf","#fee08b","#fdae61","#f46d43","#d73027","#a50026"].map(h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)));
+function color(v){
+  const t = Math.min(1,Math.max(0,(v+50)/100))*(STOPS.length-1);
+  const i = Math.min(STOPS.length-2,Math.floor(t)), f=t-i;
+  const c = STOPS[i].map((x,k)=>Math.round(x+(STOPS[i+1][k]-x)*f));
+  return `rgb(${c.join(",")})`;
+}
+
+// ============================================================
+// MOTOR DE DATOS: limpieza, conversión a USD y pivots
+// filas: [{fecha, precio, nombre, moneda, categoria, subcategoria}]
+// ============================================================
+function construirDB(filas, origen){
+  const dolar = new Map();
+  for (const r of filas) if (r.nombre === DOLAR && Number.isFinite(r.precio)) {
+    if (!dolar.has(r.fecha)) dolar.set(r.fecha, []);
+    dolar.get(r.fecha).push(r.precio);
+  }
+  const acc = new Map(), mens = new Map(), cobertura = new Map(), meta = new Map(), fechas = new Set();
+  let conCategoria = false;
+  for (const r of filas){
+    if (!r.fecha) continue;
+    const cov = cobertura.get(r.nombre);
+    if (!cov) cobertura.set(r.nombre,{fechas:[r.fecha]}); else cov.fechas.push(r.fecha);
+    if (r.categoria || r.subcategoria){ meta.set(r.nombre,{categoria:r.categoria||"",subcategoria:r.subcategoria||""}); conCategoria = true; }
+    else if (!meta.has(r.nombre)) meta.set(r.nombre,{categoria:"",subcategoria:""});
+    if (!Number.isFinite(r.precio)) continue;
+    const convertir = r.moneda === "ars" || (r.moneda === "índice" && INDICES_A_CONVERTIR.includes(r.nombre));
+    let vals;
+    if (convertir){
+      const ds = dolar.get(r.fecha); if (!ds) continue;
+      vals = ds.map(d => r.precio/d).filter(Number.isFinite);
+    } else vals = [r.precio];
+    if (!vals.length) continue;
+    // pivot diario (fecha × producto, promedio)
+    if (!acc.has(r.nombre)) acc.set(r.nombre, new Map());
+    const m = acc.get(r.nombre); const a = m.get(r.fecha) || [0,0];
+    // pivot mensual (para Variación)
+    if (!mens.has(r.nombre)) mens.set(r.nombre, new Map());
+    const mm = mens.get(r.nombre); const ym = r.fecha.slice(0,7); const b = mm.get(ym) || [0,0];
+    for (const v of vals){ a[0]+=v; a[1]++; b[0]+=v; b[1]++; }
+    m.set(r.fecha, a); mm.set(ym, b); fechas.add(r.fecha);
+  }
+  const series = new Map();
+  for (const [n,m] of acc){ const s=new Map(); for (const [f,[sum,c]] of m) s.set(f,sum/c); series.set(n,s); }
+  const mensual = new Map();
+  for (const [n,m] of mens){ const s=new Map(); for (const [f,[sum,c]] of m) s.set(f,sum/c); mensual.set(n,s); }
+  const lista = [...fechas].sort();
+  return {series, mensual, meta, conCategoria, fechas:lista, cobertura, nombres:new Set(cobertura.keys()), origen,
+          registros:filas.length, desde:lista[0], hasta:lista[lista.length-1]};
+}
+
+function serieRelacion(insumo, producto){
+  const si = DB.series.get(insumo), sp = DB.series.get(producto);
+  if (!si || !sp) return null;
+  const out = [];
+  for (const f of DB.fechas){ const a=si.get(f), b=sp.get(f); if (a!==undefined && b!==undefined && b!==0) out.push([f,a/b]); }
+  return out;
+}
+
+// ---------- FOTO ----------
+function calcularFoto(){
+  const {ini,fin,an} = state.foto;
+  const celdas = {};
+  for (const p of FOTO.productos){
+    for (const i of FOTO.insumos){
+      const rel = serieRelacion(i,p); if (!rel) continue;
+      const hist = rel.filter(([f])=>f>=ini && f<=fin).map(x=>x[1]);
+      if (hist.length < 6) continue;
+      const prom = mean(hist); if (!prom || !Number.isFinite(prom)) continue;
+      let pt = null;
+      for (const x of rel){ if (x[0] <= an) pt = x; else break; }
+      if (!pt) continue;
+      celdas[p+"||"+i] = {v:(pt[1]/prom-1)*100, prom, val:pt[1], fechaVal:pt[0], rel, insumo:i, producto:p};
+    }
+  }
+  const cols = FOTO.insumos.map(i=>{ const vs=FOTO.productos.map(p=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [i,vs.length?mean(vs):null]; })
+    .filter(x=>x[1]!==null).sort((a,b)=>a[1]-b[1]).map(x=>x[0]);
+  const filas = FOTO.productos.map(p=>{ const vs=cols.map(i=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [p,vs.length?mean(vs):null]; })
+    .filter(x=>x[1]!==null).sort((a,b)=>a[1]-b[1]).map(x=>x[0]);
+
+  const todas = [...new Set([...FOTO.insumos,...FOTO.productos,DOLAR])].sort();
+  const faltantes = todas.filter(n=>!DB.nombres.has(n));
+  const incompletas = [];
+  for (const n of todas){
+    const c = DB.cobertura.get(n); if (!c) continue;
+    const fs = c.fechas.filter(f=>f>=ini && f<=fin); if (!fs.length) continue;
+    const mn = fs.reduce((a,b)=>a<b?a:b), mx = fs.reduce((a,b)=>a>b?a:b);
+    if (mn > ini || mx < fin) incompletas.push([n,mn,mx]);
+  }
+  return {tipo:"foto", filas, cols, cell:(r,c)=>celdas[r+"||"+c]||null, faltantes, incompletas};
+}
+
+// ---------- PELÍCULA ----------
+function calcularPelicula(){
+  const {sector,base,ini,fin,an} = state.peli;
+  const cfg = SECTORES[sector];
+  const insumos = cfg.insumos.filter(i=>i!==base); // la relación de un producto consigo mismo siempre da 0%
+  const mes = Number(an.slice(5,7));
+  const rels = {}, prom = {};
+  for (const i of insumos){
+    const r = serieRelacion(i,base) || [];
+    rels[i] = r;
+    const h = r.filter(([f])=>f>=ini && f<=fin).map(x=>x[1]);
+    prom[i] = h.length ? mean(h) : NaN;
+  }
+  const relMap = Object.fromEntries(insumos.map(i=>[i,new Map(rels[i])]));
+  const columnas = new Map();
+  for (const f of DB.fechas){
+    if (f<ini || f>fin || Number(f.slice(5,7))!==mes) continue;
+    const col = {fecha:f, desv:{}, abs:{}};
+    for (const i of insumos){
+      const r = relMap[i].get(f);
+      col.abs[i] = r === undefined ? null : r;
+      col.desv[i] = (r === undefined || !prom[i] || !Number.isFinite(prom[i])) ? null : (r/prom[i]-1)*100;
+    }
+    columnas.set(f.slice(0,7), col);
+  }
+  const keys = [...columnas.keys()];
+  let filas = insumos.filter(i=>keys.some(k=>columnas.get(k).desv[i]!==null));
+  const foco = keys.includes(an.slice(0,7)) ? an.slice(0,7) : keys[keys.length-1];
+  if (foco){
+    filas = filas.map((i,ix)=>[i,columnas.get(foco).desv[i],ix])
+      .sort((a,b)=> (a[1]===null)-(b[1]===null) || (a[1]??0)-(b[1]??0) || a[2]-b[2]).map(x=>x[0]);
+  }
+  const faltantes = [...insumos,base,DOLAR].filter(n=>!DB.nombres.has(n));
+  return {tipo:"pelicula", filas, cols:keys, foco, prom, columnas, cfg, base, mes,
+    cell:(r,c)=>{ const col=columnas.get(c); const v=col.desv[r]; return v===null?null:{v, val:col.abs[r], prom:prom[r], fechaVal:col.fecha, rel:rels[r], insumo:r, producto:base}; },
+    faltantes, incompletas:[]};
+}
+
+// ---------- VARIACIÓN ----------
+function grupoInsumos(nombre, m){
+  const c = VARIACION.insumos;
+  if (c.sueltos.includes(nombre)) return nombre;
+  if (c.subcategorias.includes(m.subcategoria)) return m.subcategoria;
+  if (c.categorias.includes(m.categoria)) return m.categoria;
+  return null;
+}
+function grupoProductos(nombre, m){
+  const c = VARIACION.productos;
+  if (m.categoria === c.categoriaHacienda) return c.categoriaHacienda;
+  if (c.individuales.includes(nombre)) return nombre;
+  return null;
+}
+function tablaVariacion(fnGrupo){
+  const {desde,hasta} = state.vari;
+  const grupos = new Map();
+  for (const [nombre, m] of DB.meta){
+    const g = fnGrupo(nombre, m); if (!g) continue;
+    const s = DB.mensual.get(nombre); if (!s) continue;
+    const a = s.get(desde), b = s.get(hasta);
+    if (a===undefined || b===undefined || a===0) continue;
+    if (!grupos.has(g)) grupos.set(g, []);
+    grupos.get(g).push({nombre, a, b, v:(b/a-1)*100});
+  }
+  return [...grupos].map(([grupo, arts])=>({grupo, arts:arts.sort((x,y)=>y.v-x.v), v:mean(arts.map(x=>x.v)), n:arts.length}))
+    .sort((x,y)=>y.v-x.v);
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render(){
+  if (!DB) return;
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected", t.dataset.view===state.view));
+  for (const v of ["foto","pelicula","variacion"]) $("v-"+v).hidden = state.view!==v;
+  const esVar = state.view==="variacion";
+  $("panelHeat").hidden = esVar; $("panelVar").hidden = !esVar;
+  if (esVar) return renderVariacion();
+
+  RES = state.view==="foto" ? calcularFoto() : calcularPelicula();
+  if (RES.tipo==="foto"){
+    const {ini,fin,an} = state.foto;
+    $("gTitulo").textContent = `Relación insumos / productos al ${fechaLarga(an)}`;
+    $("gSub").textContent = `Desvío % respecto del promedio ${ini.slice(0,4)}–${fin.slice(0,4)} (${ini} a ${fin}), en dólar oficial`;
+  } else {
+    const {ini,fin} = state.peli;
+    $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
+    $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general ${ini.slice(0,4)}–${fin.slice(0,4)}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+  }
+
+  const hm = $("hm");
+  if (!RES.filas.length || !RES.cols.length){
+    hm.innerHTML = `<p class="vacio">No hay datos suficientes para estos parámetros. Revisá las fechas o los avisos de abajo.</p>`;
+  } else {
+    const vertical = RES.tipo==="foto";
+    let h = `<table class="hm"><thead><tr><th class="rowh"></th>`;
+    for (const c of RES.cols){
+      const foco = RES.tipo==="pelicula" && c===RES.foco ? " foco" : "";
+      h += vertical ? `<th class="v" title="${esc(c)}"><span>${esc(c)}</span></th>` : `<th class="h${foco}">${esc(c)}</th>`;
+    }
+    h += `</tr></thead><tbody>`;
+    RES.filas.forEach((r,ri)=>{
+      h += `<tr><th class="rowh" title="${esc(r)}">${esc(r)}</th>`;
+      RES.cols.forEach((c,ci)=>{
+        const cell = RES.cell(r,c);
+        if (!cell){ h += `<td class="c na"></td>`; return; }
+        const txt = Math.abs(cell.v)>=25 ? "#fff" : "#000";
+        const sel = state.sel && state.sel[0]===r && state.sel[1]===c ? " sel" : "";
+        const foco = RES.tipo==="pelicula" && c===RES.foco ? " foco" : "";
+        h += `<td class="c${sel}${foco}" data-r="${ri}" data-c="${ci}" tabindex="0" style="background:${color(cell.v)};color:${txt}" title="${esc(r)} · ${esc(c)}: ${fmtPct(cell.v)}">${Math.round(cell.v)}%</td>`;
+      });
+      h += `</tr>`;
+    });
+    hm.innerHTML = h + `</tbody></table>`;
+  }
+
+  $("botonesCopia").innerHTML = RES.tipo==="foto"
+    ? `<button data-copia="desv">Copiar matriz</button>`
+    : `<button data-copia="desv">Copiar desvíos</button><button data-copia="abs">Copiar relaciones absolutas</button>`;
+
+  if (!state.sel || !RES.cell(state.sel[0],state.sel[1])){
+    state.sel = null;
+    outer: for (const r of RES.filas) for (const c of RES.cols) if (RES.cell(r,c)) { state.sel=[r,c]; break outer; }
+    if (state.sel){ const td = hm.querySelector(`td[data-r="${RES.filas.indexOf(state.sel[0])}"][data-c="${RES.cols.indexOf(state.sel[1])}"]`); td && td.classList.add("sel"); }
+  }
+  renderDetalle();
+  renderAvisos();
+}
+
+function renderDetalle(){
+  const el = $("detalle");
+  const cell = state.sel ? RES.cell(state.sel[0], state.sel[1]) : null;
+  if (!cell){ el.innerHTML=""; return; }
+  const per = RES.tipo==="foto" ? state.foto : state.peli;
+  el.innerHTML = `
+    <div>
+      <h3>${esc(cell.insumo)} ÷ ${esc(cell.producto)}</h3>
+      <dl class="kv">
+        <dt>Unidades de producto por insumo</dt><dd>${fmtRel(cell.val)}</dd>
+        <dt>Dato usado</dt><dd>${cell.fechaVal}</dd>
+        <dt>Promedio ${per.ini.slice(0,4)}–${per.fin.slice(0,4)}</dt><dd>${fmtRel(cell.prom)}</dd>
+        <dt>Desvío</dt><dd><strong>${fmtPct(cell.v)}</strong></dd>
+      </dl>
+      <p class="vacio">${cell.v<0 ? "Hace falta menos producto que en promedio para comprar este insumo." : "Hace falta más producto que en promedio para comprar este insumo."}</p>
+    </div>
+    <div class="chart">${grafico(cell.rel, cell.prom, per.ini, per.fin, cell.fechaVal)}</div>`;
+}
+
+function grafico(pts, prom, ini, fin, marca){
+  if (!pts || pts.length<2) return `<p class="vacio">Serie sin datos suficientes.</p>`;
+  const W=760,H=230,L=58,R=14,T=14,B=28;
+  const t = f => Date.parse(f+"T00:00:00Z");
+  const x0=t(pts[0][0]), x1=t(pts[pts.length-1][0]);
+  let ys = pts.map(p=>p[1]).concat([prom]); let y0=Math.min(...ys), y1=Math.max(...ys);
+  const pad=(y1-y0)*0.08||Math.abs(y1)*0.1||1; y0-=pad; y1+=pad;
+  const X=f=>L+(t(f)-x0)/(x1-x0||1)*(W-L-R), Y=v=>T+(1-(v-y0)/(y1-y0))*(H-T-B);
+  const step = niceStep((y1-y0)/4);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Serie histórica de la relación">`;
+  const bi = Math.max(X(ini<pts[0][0]?pts[0][0]:ini),L), bf=Math.min(X(fin>pts[pts.length-1][0]?pts[pts.length-1][0]:fin),W-R);
+  if (bf>bi) s+=`<rect class="band" x="${bi}" y="${T}" width="${bf-bi}" height="${H-T-B}"/>`;
+  for (let v=Math.ceil(y0/step)*step; v<=y1; v+=step){ s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tx" x="${L-6}" y="${Y(v)+4}" text-anchor="end">${fmtRel(v)}</text>`; }
+  const ya=Number(pts[0][0].slice(0,4)), yb=Number(pts[pts.length-1][0].slice(0,4));
+  const yStep = yb-ya>14?4:yb-ya>7?2:1;
+  for (let y=ya+1; y<=yb; y+=yStep){ const xx=X(`${y}-01-01`); if (xx>L&&xx<W-R) s+=`<text class="tx" x="${xx}" y="${H-8}" text-anchor="middle">${y}</text>`; }
+  s+=`<line class="prom" x1="${L}" x2="${W-R}" y1="${Y(prom)}" y2="${Y(prom)}"/><text class="tx" x="${W-R}" y="${Y(prom)-5}" text-anchor="end">promedio</text>`;
+  s+=`<path class="ln" d="${pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join("")}"/>`;
+  const m = pts.find(p=>p[0]===marca);
+  if (m) s+=`<line class="mkl" x1="${X(m[0])}" x2="${X(m[0])}" y1="${T}" y2="${H-B}"/><circle class="mk" cx="${X(m[0])}" cy="${Y(m[1])}" r="4"/>`;
+  return s+`</svg>`;
+}
+function niceStep(raw){ const p=Math.pow(10,Math.floor(Math.log10(raw))); const n=raw/p; return (n<1.5?1:n<3?2:n<7?5:10)*p; }
+
+function renderAvisos(){
+  let h="";
+  if (RES.faltantes.length) h+=`<div class="aviso"><strong>Series que no están en los datos cargados</strong> (se omiten del cálculo):<ul>${RES.faltantes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></div>`;
+  if (RES.incompletas.length){
+    const per = state.foto;
+    h+=`<div class="aviso"><strong>Series que no cubren todo el período del promedio</strong> (${per.ini} a ${per.fin}):<ul>${RES.incompletas.map(([n,a,b])=>`<li>${esc(n)}: disponible desde ${a} hasta ${b}</li>`).join("")}</ul></div>`;
+  }
+  $("avisos").innerHTML = h;
+}
+
+let TABLAS_VAR = null;
+function renderVariacion(){
+  const {desde,hasta} = state.vari;
+  $("avisos").innerHTML = DB.conCategoria ? "" :
+    `<div class="aviso"><strong>Los datos cargados no traen categoría ni subcategoría.</strong> Esta solapa los necesita para armar los grupos. Conectate a la base o subí un CSV con las columnas <code>categoria</code> y <code>subcategoria</code>.</div>`;
+  TABLAS_VAR = [
+    {id:"insumos", titulo:VARIACION.insumos.titulo, filas:tablaVariacion(grupoInsumos)},
+    {id:"productos", titulo:VARIACION.productos.titulo, filas:tablaVariacion(grupoProductos)}
+  ];
+  $("panelVar").innerHTML = TABLAS_VAR.map(t=>{
+    const max = Math.max(10, ...t.filas.map(f=>Math.abs(f.v)));
+    const hayNeg = t.filas.some(f=>f.v<0);
+    const cero = hayNeg ? 50 : 0, escala = hayNeg ? 50 : 100;
+    const filas = t.filas.map(f=>{
+      const w = Math.abs(f.v)/max*escala;
+      const left = f.v<0 ? cero-w : cero;
+      const abierto = state.vari.abiertos.has(t.id+"|"+f.grupo);
+      return `<button class="vrow" data-k="${esc(t.id+"|"+f.grupo)}" aria-expanded="${abierto}">
+          <span class="nm">${esc(f.grupo)}<small>${f.n} ${f.n===1?"artículo":"artículos"}</small></span>
+          <span class="vbar"><span class="b${f.v<0?" neg":""}" style="left:${left}%;width:${w}%"></span><span class="eje" style="left:${cero}%"></span></span>
+          <span class="pct">${fmtPct(f.v,1)}</span>
+        </button>` + (abierto ? `<div class="vdet">${f.arts.map(a=>`<div><span>${esc(a.nombre)}</span><span>${fmtPct(a.v,1)}</span></div>`).join("")}</div>` : "");
+    }).join("");
+    return `<div class="panel">
+      <div class="barra">
+        <div class="titulo-graf"><h2>${esc(t.titulo)}</h2><p>Variación % promedio en USD oficial, ${mesLargo(desde)} vs ${mesLargo(hasta)}</p></div>
+        <button data-copiavar="${t.id}">Copiar tabla</button>
+      </div>
+      ${t.filas.length ? `<div><div class="vhead"><span>Grupo</span><span>Variación promedio</span><span>%</span></div>${filas}</div>
+      <span class="vacio">Tocá un grupo para ver los artículos incluidos.</span>`
+      : `<p class="vacio">No hay artículos con precio en ${mesLargo(desde)} y en ${mesLargo(hasta)}.</p>`}
+    </div>`;
+  }).join("");
+}
+function tsvVariacion(id){
+  const t = TABLAS_VAR.find(x=>x.id===id); const {desde,hasta}=state.vari;
+  const L = ["Grupo\tVariación promedio %\tCantidad de artículos"];
+  for (const f of t.filas) L.push(`${f.grupo}\t${numXL(f.v)}\t${f.n}`);
+  L.push("", `Grupo\tArtículo\t${desde} (USD)\t${hasta} (USD)\tVariación %`);
+  for (const f of t.filas) for (const a of f.arts) L.push(`${f.grupo}\t${a.nombre}\t${numXL(a.a)}\t${numXL(a.b)}\t${numXL(a.v)}`);
+  return L.join("\n");
+}
+
+function tsv(tipo){
+  const head = [RES.tipo==="foto"?"Producto":"Insumo", ...RES.cols];
+  const lines = [head.join("\t")];
+  for (const r of RES.filas){
+    lines.push([r, ...RES.cols.map(c=>{
+      if (tipo==="abs") return numXL(RES.columnas.get(c).abs[r]);
+      const cell=RES.cell(r,c); return cell?numXL(cell.v):"";
+    })].join("\t"));
+  }
+  if (tipo==="abs"){ lines.push("","Insumo\tPromedio período (USD)"); for (const r of RES.filas) lines.push(r+"\t"+numXL(RES.prom[r])); }
+  return lines.join("\n");
+}
+
+// ============================================================
+// CONTROLES
+// ============================================================
+function sincronizarControles(){
+  $("f-ini").value=state.foto.ini; $("f-fin").value=state.foto.fin; $("f-an").value=state.foto.an;
+  $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini; $("p-fin").value=state.peli.fin; $("p-an").value=state.peli.an;
+  $("v-desde").value=state.vari.desde; $("v-hasta").value=state.vari.hasta;
+  const cfg = SECTORES[state.peli.sector], sel=$("p-base");
+  sel.innerHTML = cfg.bases.map(g=>`<option${g===state.peli.base?" selected":""}>${esc(g)}</option>`).join("");
+  sel.disabled = cfg.bases.length < 2;
+}
+function bind(id, obj, key){ $(id).addEventListener("change", e=>{ if(e.target.value){ state[obj][key]=e.target.value; state.sel=null; render(); } }); }
+bind("f-ini","foto","ini"); bind("f-fin","foto","fin"); bind("f-an","foto","an");
+bind("p-ini","peli","ini"); bind("p-fin","peli","fin"); bind("p-an","peli","an");
+bind("v-desde","vari","desde"); bind("v-hasta","vari","hasta");
+$("p-sec").addEventListener("change", e=>{
+  state.peli.sector=e.target.value; state.peli.base=SECTORES[e.target.value].default;
+  state.sel=null; sincronizarControles(); render();
+});
+$("p-base").addEventListener("change", e=>{ state.peli.base=e.target.value; state.sel=null; render(); });
+
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ location.hash=t.dataset.view; }));
+function leerHash(){ const h=location.hash.slice(1); state.view = ["pelicula","variacion"].includes(h)?h:"foto"; state.sel=null; render(); }
+window.addEventListener("hashchange", leerHash);
+
+function elegir(td){
+  if (!td || !td.dataset.r) return;
+  state.sel=[RES.filas[+td.dataset.r], RES.cols[+td.dataset.c]];
+  $("hm").querySelectorAll("td.sel").forEach(x=>x.classList.remove("sel")); td.classList.add("sel");
+  renderDetalle();
+}
+$("hm").addEventListener("click", e=>elegir(e.target.closest("td.c")));
+$("hm").addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); elegir(e.target.closest("td.c")); } });
+$("botonesCopia").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  copiar(tsv(b.dataset.copia), "Copiado. Pegalo en Excel o Google Sheets.");
+});
+$("panelVar").addEventListener("click", e=>{
+  const c=e.target.closest("[data-copiavar]");
+  if (c) return copiar(tsvVariacion(c.dataset.copiavar), "Copiado. Pegalo en Excel o Google Sheets.");
+  const r=e.target.closest(".vrow"); if(!r) return;
+  const k=r.dataset.k, ab=state.vari.abiertos; ab.has(k)?ab.delete(k):ab.add(k); renderVariacion();
+});
+$("copiarSnippet").addEventListener("click", ()=>copiar($("snippet").textContent, "Código copiado"));
+
+// ============================================================
+// CARGA DESDE LA BASE DE CREA (vía /api/datos en Vercel)
+// ============================================================
+async function api(cuerpo){
+  const r = await fetch("api/datos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cuerpo)});
+  let j = null; try{ j = await r.json(); }catch(e){}
+  if (!r.ok) throw new Error((j && j.error) || `Error del servidor (${r.status}).`);
+  return j;
+}
+async function descargarBase(usuario, password, progreso){
+  progreso(0, "Conectando y leyendo el catálogo de productos…");
+  const {productos} = await api({usuario,password,accion:"productos"});
+  const info = new Map(productos.map(p=>[String(p.id),{nombre:limpiar(p.nombre), moneda:limpiar(p.moneda).toLowerCase(), categoria:limpiar(p.categoria), subcategoria:limpiar(p.subcategoria)}]));
+  // Lotes de hasta ~80.000 filas para no pasar el límite de respuesta de Vercel
+  const conDatos = productos.filter(p=>p.n>0).sort((a,b)=>b.n-a.n);
+  const lotes=[]; let actual=[], suma=0;
+  for (const p of conDatos){
+    if (actual.length && suma+p.n>80000){ lotes.push(actual); actual=[]; suma=0; }
+    actual.push(p.id); suma+=p.n;
+  }
+  if (actual.length) lotes.push(actual);
+  const total = conDatos.reduce((s,p)=>s+p.n,0);
+  const filas=[]; let hechos=0, idx=0;
+  async function trabajador(){
+    while (idx < lotes.length){
+      const lote = lotes[idx++];
+      const d = await api({usuario,password,accion:"precios",ids:lote});
+      for (let i=0;i<d.id.length;i++){
+        const m = info.get(String(d.id[i])); if (!m) continue;
+        filas.push({fecha:d.f[i], precio: d.p[i]===null?NaN:Number(d.p[i]), nombre:m.nombre, moneda:m.moneda, categoria:m.categoria, subcategoria:m.subcategoria});
+      }
+      hechos += d.id.length;
+      progreso(Math.min(99, Math.round(hechos/Math.max(total,1)*100)), `Descargando precios… ${hechos.toLocaleString("es-AR")} de ${total.toLocaleString("es-AR")} registros`);
+    }
+  }
+  await Promise.all([trabajador(),trabajador(),trabajador()]);
+  progreso(100, "Calculando…");
+  return construirDB(filas,{nombre:"Base CREA", base:true});
+}
+
+function abrirLogin(){
+  $("lg-err").hidden=true; $("lg-progw").hidden=true; $("lg-btn").disabled=false;
+  try{ $("lg-user").value = localStorage.getItem("agro-usuario") || $("lg-user").value; }catch(e){}
+  $("login").hidden=false;
+  ($("lg-user").value ? $("lg-pass") : $("lg-user")).focus();
+}
+$("loginForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const usuario=$("lg-user").value.trim(), pass=$("lg-pass").value;
+  if (!usuario || !pass) return;
+  $("lg-err").hidden=true; $("lg-btn").disabled=true; $("lg-progw").hidden=false;
+  try{
+    const nuevo = await descargarBase(usuario, pass, (p,msg)=>{ $("lg-prog").style.width=p+"%"; $("lg-msg").textContent=msg; });
+    if (!nuevo.fechas.length) throw new Error("La consulta no devolvió precios.");
+    DB = nuevo;
+    try{ localStorage.setItem("agro-usuario", usuario); }catch(e){}
+    $("lg-pass").value=""; $("login").hidden=true;
+    state.sel=null; mostrarOrigen(); render(); toast("Datos de la base cargados");
+  }catch(err){
+    $("lg-err").textContent = err.message.includes("Failed to fetch") ? "No se pudo llegar al servidor. Revisá la conexión a internet." : err.message;
+    $("lg-err").hidden=false; $("lg-progw").hidden=true; $("lg-btn").disabled=false;
+  }
+});
+$("lg-skip").addEventListener("click", ()=>{ $("login").hidden=true; });
+$("btnConectar").addEventListener("click", abrirLogin);
+
+// ============================================================
+// CARGA DESDE CSV
+// ============================================================
+function filasDesdeCSV(texto){
+  const res = Papa.parse(texto, {header:true, skipEmptyLines:true, transformHeader:h=>h.trim().toLowerCase()});
+  const campos = res.meta.fields || [];
+  const req = ["fecha","precio","producto_nombre","moneda"].filter(c=>!campos.includes(c));
+  if (req.length) throw new Error(`Al CSV le faltan las columnas: ${req.join(", ")}.`);
+  return res.data.map(r=>({fecha:parseFecha(r.fecha), precio:parseNum(r.precio), nombre:limpiar(r.producto_nombre),
+    moneda:limpiar(r.moneda).toLowerCase(), categoria:limpiar(r.categoria), subcategoria:limpiar(r.subcategoria)}));
+}
+function mostrarOrigen(){
+  const chip=$("chipDatos");
+  $("btnConectar").hidden = !HAY_SERVIDOR;
+  if (DB.origen.ejemplo){
+    chip.className="chip ej"; chip.textContent="Datos de ejemplo simulados, no son precios reales";
+    $("btnEjemplo").hidden=true;
+  } else {
+    chip.className="chip";
+    chip.textContent=`${DB.origen.nombre} · ${DB.registros.toLocaleString("es-AR")} registros · ${DB.desde} a ${DB.hasta}`;
+    $("btnEjemplo").hidden=false;
+  }
+}
+$("archivo").addEventListener("change", async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  $("chipDatos").textContent="Procesando "+f.name+"…";
+  try{
+    const texto = await f.text();
+    const nuevo = construirDB(filasDesdeCSV(texto), {nombre:f.name});
+    if (!nuevo.fechas.length) throw new Error("El archivo no tiene filas con fecha y precio válidos.");
+    DB = nuevo;
+    await idbSet("csv",{nombre:f.name,texto}).catch(()=>{});
+    state.sel=null; mostrarOrigen(); render(); toast("Datos cargados");
+  }catch(err){ toast(err.message); if (DB) mostrarOrigen(); }
+  e.target.value="";
+});
+$("btnEjemplo").addEventListener("click", async ()=>{ await idbDel("csv").catch(()=>{}); DB=datosEjemplo(); state.sel=null; mostrarOrigen(); render(); });
+
+function idbOpen(){ return new Promise((res,rej)=>{ try{ const r=indexedDB.open("tablero-agroseries",1); r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}catch(e){rej(e);} }); }
+async function idbGet(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const q=db.transaction("kv").objectStore("kv").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
+async function idbSet(k,v){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function idbDel(k){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction("kv","readwrite"); tx.objectStore("kv").delete(k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+
+// ============================================================
+// DATOS DE EJEMPLO (simulados, mensuales 2014–2026)
+// ============================================================
+function datosEjemplo(){
+  let seed=20261103; const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  const gauss=()=>Math.sqrt(-2*Math.log(rnd()+1e-12))*Math.cos(2*Math.PI*rnd());
+  const USD = {"Soja":320,"Maíz":175,"Trigo":210,"Girasol":340,"Cebada":200,"Sorgo (":150,"Urea":520,"Fosfato monoamónico":680,"Fosfato diamónico":670,"Superfosfato simple":380,"Glifosato 54%":4.5,"2,4 D 50%":4,"2,4 D 100%":7,"Picloram 24%":14,"Stinger":30,"Coragen":220,"Engeo":35,"Tierra en zona de cría":1800,"Tierra en zona invernada":3200,"Tierra en zona maicera":11000,"Tierra en zona triguera":7500,"Hilux 4x4 CS":32000,"Hilux 4x4 DC":45000,"Segadora C400":28000,"Rotoenfardadora 561M":60000,"Rotoenfardadora 461M":45000,"6170J":160000,"7M 230":230000,"Mixer":38000};
+  const ARS = {"Ternero 160-180 kg":2.5,"Ternero 180-200 kg":2.4,"Novillito 260-300 kg":2.3,"Vacas C. Gtía":900,"Novillito Esp. h 390":2.1,"Novillo Esp.Joven +430":2,"Litro de leche":0.33,"Ternero holando":80,"Poste quebracho colorado":45,"Alambre 17/15":230,"Cepo Mod. A":2500,"Gasoil agropecuario":1,"Unidad Técnica Agrícola (UTA)":30,"Valor Metro Cuadrado":900,"Vaq. R.C.":900,"Flete 300 km":15,"Empleado rural":700,"Sorgo forrajero":6,"Alfalfa":9,"Espina de pescado":25000,"Estaca completa":25,"Electrificador":250,"Balanceado":300,"Concentrado":450,"UVA":1};
+  const CAT = [[/^(Glifosato|2,4 D|Picloram)/,"Insumos","Herbicidas"],[/^(Urea|Fosfato|Superfosfato)/,"Insumos","Fertilizante"],[/^Tierra/,"Insumos","Tierra"],
+    [/^Gasoil/,"Insumos","Combustible"],[/^Flete/,"Insumos","Flete"],[/^Unidad Técnica/,"Insumos","Labores"],[/^(Balanceado|Concentrado)/,"Insumos","Suplemento Alimentario"],
+    [/^(6170J|7M|Segadora|Rotoenfardadora|Mixer)/,"Maquinaria",""],[/^Hilux/,"Camioneta",""],[/^(Alfalfa|Sorgo forrajero)/,"Forrajeras",""],
+    [/^(Ternero|Novill|Vacas|Vaq)/,"Precio Hacienda",""],[/\(disp\.\)|\((ene|mar|abr|may|jul)\)/,"Granos",""]];
+  const buscar=(tabla,n)=>{ for(const k in tabla) if(n.startsWith(k)) return tabla[k]; return null; };
+  const nombres=[...new Set([...FOTO.insumos,...FOTO.productos,...GRANOS,...Object.values(SECTORES).flatMap(s=>[...s.bases,...s.insumos])])];
+  const fechas=[]; for(let y=2014;y<=2026;y++) for(let m=1;m<=12;m++){ if(y===2026&&m>10) break; fechas.push(`${y}-${String(m).padStart(2,"0")}-01`); }
+  const filas=[]; const k=Math.log(1450/8)/fechas.length; let shock=0;
+  const dol = fechas.map((f,i)=>{ shock+=gauss()*0.02; return 8*Math.exp(k*i+shock); });
+  fechas.forEach((f,i)=>filas.push({fecha:f,precio:dol[i],nombre:DOLAR,moneda:"ars",categoria:"Indicadores",subcategoria:""}));
+  for (const n of nombres){
+    let base=buscar(USD,n), mon="usd";
+    if (base===null){ base=buscar(ARS,n)??100; mon = n==="UVA"?"índice":"ars"; }
+    const c = CAT.find(([re])=>re.test(n)) || [null,"Otros",""];
+    let w=0; const fase=rnd()*6.28, amp=0.04+rnd()*0.08;
+    fechas.forEach((f,i)=>{
+      w+=gauss()*0.035;
+      const usd = base*Math.exp(w+amp*Math.sin(i/6+fase));
+      filas.push({fecha:f, precio: mon==="usd"?usd:usd*dol[i], nombre:n, moneda:mon, categoria:c[1], subcategoria:c[2]});
+    });
+  }
+  return construirDB(filas,{ejemplo:true});
+}
+
+// ============================================================
+// INICIO
+// ============================================================
+(async function(){
+  sincronizarControles();
+  // ¿Hay servidor (Vercel) para conectarse a la base?
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 4000);
+    const r = await fetch("api/datos",{method:"GET",signal:ctrl.signal});
+    HAY_SERVIDOR = r.ok && (await r.json()).ok === true;
+  }catch(e){ HAY_SERVIDOR = false; }
+
+  let guardado=null; try{ guardado=await idbGet("csv"); }catch(e){}
+  if (guardado && guardado.texto){ try{ DB=construirDB(filasDesdeCSV(guardado.texto),{nombre:guardado.nombre}); }catch(e){ DB=null; } }
+  if (!DB) DB=datosEjemplo();
+  mostrarOrigen(); leerHash();
+  if (HAY_SERVIDOR) abrirLogin();
+})();
+</script>
+
+</body>
+</html>
