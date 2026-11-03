@@ -164,10 +164,10 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
 
   <section id="v-foto" class="vista" hidden>
     <div class="controles">
-      <div class="campo"><label for="f-ini">Promedio desde</label><input type="date" id="f-ini"></div>
-      <div class="campo"><label for="f-fin">Promedio hasta</label><input type="date" id="f-fin"></div>
+      <div class="campo"><label for="f-ini">Promedio desde</label><input type="month" id="f-ini"></div>
+      <div class="campo"><label for="f-fin">Promedio hasta</label><input type="month" id="f-fin"></div>
       <div class="sep"></div>
-      <div class="campo"><label for="f-an">Fecha de la foto</label><input type="date" id="f-an"></div>
+      <div class="campo"><label for="f-an">Mes de la foto</label><input type="month" id="f-an"></div>
     </div>
   </section>
 
@@ -177,10 +177,10 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
         <select id="p-sec"><option value="agricultura">Agricultura</option><option value="lecheria">Lechería / Tambo</option><option value="ganaderia">Ganadería</option></select></div>
       <div class="campo"><label for="p-base">Producto base</label><select id="p-base"></select></div>
       <div class="sep"></div>
-      <div class="campo"><label for="p-ini">Promedio desde</label><input type="date" id="p-ini"></div>
-      <div class="campo"><label for="p-fin">Promedio hasta</label><input type="date" id="p-fin"></div>
+      <div class="campo"><label for="p-ini">Promedio desde</label><input type="month" id="p-ini"></div>
+      <div class="campo"><label for="p-fin">Promedio hasta</label><input type="month" id="p-fin"></div>
       <div class="sep"></div>
-      <div class="campo"><label for="p-an">Fecha de análisis</label><input type="date" id="p-an"></div>
+      <div class="campo"><label for="p-an">Mes de análisis</label><input type="month" id="p-an"></div>
     </div>
   </section>
 
@@ -266,8 +266,8 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 // ============================================================
 const state = {
   view:"foto",
-  foto:{ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-01"},
-  peli:{sector:"agricultura",base:"Girasol (disp.)",ini:"2016-06-01",fin:"2026-06-01",an:"2026-06-01"},
+  foto:{ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
+  peli:{sector:"agricultura",base:"Girasol (disp.)",ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
   vari:{desde:"2023-11",hasta:"2026-09",abiertos:new Set()},
   sel:null
 };
@@ -292,8 +292,10 @@ function parseNum(v){
 }
 function parseFecha(v){
   const s = String(v ?? "").trim();
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if (m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  m = s.match(/^(\d{4})[-\/](\d{1,2})$/); if (m) return `${m[1]}-${m[2].padStart(2,"0")}-01`;
+  m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   return null;
 }
 function fmtPct(v,d=0){ return (v>0?"+":"") + v.toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d}) + "%"; }
@@ -408,7 +410,7 @@ function calcularFoto(){
     const c = DB.cobertura.get(n); if (!c) continue;
     const fs = c.fechas.filter(f=>f>=ini && f<=fin); if (!fs.length) continue;
     const mn = fs.reduce((a,b)=>a<b?a:b), mx = fs.reduce((a,b)=>a>b?a:b);
-    if (mn > ini || mx < fin) incompletas.push([n,mn,mx]);
+    if (mn.slice(0,7) > ini.slice(0,7) || mx.slice(0,7) < fin.slice(0,7)) incompletas.push([n,mn.slice(0,7),mx.slice(0,7)]);
   }
   return {tipo:"foto", filas, cols, cell:(r,c)=>celdas[r+"||"+c]||null, faltantes, incompletas};
 }
@@ -494,12 +496,12 @@ function render(){
   RES = state.view==="foto" ? calcularFoto() : calcularPelicula();
   if (RES.tipo==="foto"){
     const {ini,fin,an} = state.foto;
-    $("gTitulo").textContent = `Relación insumos / productos al ${fechaLarga(an)}`;
-    $("gSub").textContent = `Desvío % respecto del promedio ${ini.slice(0,4)}–${fin.slice(0,4)} (${ini} a ${fin}), en dólar oficial`;
+    $("gTitulo").textContent = `Relación insumos / productos en ${mesLargo(an.slice(0,7))}`;
+    $("gSub").textContent = `Desvío % respecto del promedio de ${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}, en dólar oficial`;
   } else {
     const {ini,fin} = state.peli;
     $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
-    $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general ${ini.slice(0,4)}–${fin.slice(0,4)}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+    $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
   }
 
   const hm = $("hm");
@@ -551,7 +553,7 @@ function renderDetalle(){
       <h3>${esc(cell.insumo)} ÷ ${esc(cell.producto)}</h3>
       <dl class="kv">
         <dt>Unidades de producto por insumo</dt><dd>${fmtRel(cell.val)}</dd>
-        <dt>Dato usado</dt><dd>${cell.fechaVal}</dd>
+        <dt>Dato usado</dt><dd>${mesLargo(cell.fechaVal.slice(0,7))}</dd>
         <dt>Promedio ${per.ini.slice(0,4)}–${per.fin.slice(0,4)}</dt><dd>${fmtRel(cell.prom)}</dd>
         <dt>Desvío</dt><dd><strong>${fmtPct(cell.v)}</strong></dd>
       </dl>
@@ -589,7 +591,7 @@ function renderAvisos(){
   if (RES.faltantes.length) h+=`<div class="aviso"><strong>Series que no están en los datos cargados</strong> (se omiten del cálculo):<ul>${RES.faltantes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></div>`;
   if (RES.incompletas.length){
     const per = state.foto;
-    h+=`<div class="aviso"><strong>Series que no cubren todo el período del promedio</strong> (${per.ini} a ${per.fin}):<ul>${RES.incompletas.map(([n,a,b])=>`<li>${esc(n)}: disponible desde ${a} hasta ${b}</li>`).join("")}</ul></div>`;
+    h+=`<div class="aviso"><strong>Series que no cubren todo el período del promedio</strong> (${mesLargo(per.ini.slice(0,7))} a ${mesLargo(per.fin.slice(0,7))}):<ul>${RES.incompletas.map(([n,a,b])=>`<li>${esc(n)}: disponible desde ${a} hasta ${b}</li>`).join("")}</ul></div>`;
   }
   $("avisos").innerHTML = h;
 }
@@ -654,16 +656,20 @@ function tsv(tipo){
 // CONTROLES
 // ============================================================
 function sincronizarControles(){
-  $("f-ini").value=state.foto.ini; $("f-fin").value=state.foto.fin; $("f-an").value=state.foto.an;
-  $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini; $("p-fin").value=state.peli.fin; $("p-an").value=state.peli.an;
+  $("f-ini").value=state.foto.ini.slice(0,7); $("f-fin").value=state.foto.fin.slice(0,7); $("f-an").value=state.foto.an.slice(0,7);
+  $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini.slice(0,7); $("p-fin").value=state.peli.fin.slice(0,7); $("p-an").value=state.peli.an.slice(0,7);
   $("v-desde").value=state.vari.desde; $("v-hasta").value=state.vari.hasta;
   const cfg = SECTORES[state.peli.sector], sel=$("p-base");
   sel.innerHTML = cfg.bases.map(g=>`<option${g===state.peli.base?" selected":""}>${esc(g)}</option>`).join("");
   sel.disabled = cfg.bases.length < 2;
 }
 function bind(id, obj, key){ $(id).addEventListener("change", e=>{ if(e.target.value){ state[obj][key]=e.target.value; state.sel=null; render(); } }); }
-bind("f-ini","foto","ini"); bind("f-fin","foto","fin"); bind("f-an","foto","an");
-bind("p-ini","peli","ini"); bind("p-fin","peli","fin"); bind("p-an","peli","an");
+// Los selectores son de mes: el inicio toma el día 1 y el fin / análisis el último día del mes
+const ultimoDia = ym => { const [y,m]=ym.split("-").map(Number); return `${ym}-${String(new Date(Date.UTC(y,m,0)).getUTCDate()).padStart(2,"0")}`; };
+function bindMes(id, obj, key, extremo){ $(id).addEventListener("change", e=>{ const ym=e.target.value; if(!ym) return;
+  state[obj][key] = extremo==="ini" ? ym+"-01" : ultimoDia(ym); state.sel=null; render(); }); }
+bindMes("f-ini","foto","ini","ini"); bindMes("f-fin","foto","fin","fin"); bindMes("f-an","foto","an","fin");
+bindMes("p-ini","peli","ini","ini"); bindMes("p-fin","peli","fin","fin"); bindMes("p-an","peli","an","fin");
 bind("v-desde","vari","desde"); bind("v-hasta","vari","hasta");
 $("p-sec").addEventListener("change", e=>{
   state.peli.sector=e.target.value; state.peli.base=SECTORES[e.target.value].default;
@@ -724,7 +730,7 @@ async function descargarBase(usuario, password, progreso){
       const d = await api({usuario,password,accion:"precios",ids:lote});
       for (let i=0;i<d.id.length;i++){
         const m = info.get(String(d.id[i])); if (!m) continue;
-        filas.push({fecha:d.f[i], precio: d.p[i]===null?NaN:Number(d.p[i]), nombre:m.nombre, moneda:m.moneda, categoria:m.categoria, subcategoria:m.subcategoria});
+        filas.push({fecha:parseFecha(d.f[i]), precio:parseNum(d.p[i]), nombre:m.nombre, moneda:m.moneda, categoria:m.categoria, subcategoria:m.subcategoria});
       }
       hechos += d.id.length;
       progreso(Math.min(99, Math.round(hechos/Math.max(total,1)*100)), `Descargando precios… ${hechos.toLocaleString("es-AR")} de ${total.toLocaleString("es-AR")} registros`);
