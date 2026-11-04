@@ -96,7 +96,11 @@ td.c.sel{outline:2px solid var(--ink);outline-offset:1px}
 .cleg .sw-ln{width:18px;height:0;border-top:2px solid var(--accent)}
 .cleg .sw-prom{width:18px;height:0;border-top:1.5px dashed var(--ink)}
 .cleg .sw-mk{width:8px;height:8px;border-radius:50%;background:var(--ink)}
-.editor{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.personalizar{margin-top:10px}
+.personalizar>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent);padding:4px 2px;width:max-content;max-width:100%}
+.sum-info{font-weight:400;color:var(--muted);margin-left:4px}
+.ed-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.editor{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;margin-top:8px;min-width:0}
 .ed-tit{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .ichip{display:inline-flex;align-items:center;gap:2px;padding:3px 3px 3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink);font-size:12.5px;max-width:100%}
@@ -190,6 +194,27 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
       <div class="sep"></div>
       <div class="campo"><label for="f-an">Mes de la foto</label><input type="month" id="f-an"></div>
     </div>
+    <details class="personalizar">
+      <summary>Personalizar productos e insumos <span class="sum-info" id="sum-foto"></span></summary>
+      <div class="ed-grid">
+      <div class="editor" data-lista="foto-prod">
+        <div class="barra"><span class="ed-tit"></span><button class="link ed-reset" type="button" hidden>Restaurar lista original</button></div>
+        <div class="chips"></div>
+        <div class="ed-add">
+          <input type="text" id="ed-foto-prod" class="ed-input" list="lista-productos" placeholder="Buscá un producto para agregarlo como fila…" autocomplete="off">
+          <button class="ed-add-btn" type="button">Agregar</button>
+        </div>
+      </div>
+      <div class="editor" data-lista="foto-ins">
+        <div class="barra"><span class="ed-tit"></span><button class="link ed-reset" type="button" hidden>Restaurar lista original</button></div>
+        <div class="chips"></div>
+        <div class="ed-add">
+          <input type="text" id="ed-foto-ins" class="ed-input" list="lista-productos" placeholder="Buscá un insumo para agregarlo como columna…" autocomplete="off">
+          <button class="ed-add-btn" type="button">Agregar</button>
+        </div>
+      </div>
+      </div>
+    </details>
   </section>
 
   <section id="v-pelicula" class="vista" hidden>
@@ -203,15 +228,17 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
       <div class="sep"></div>
       <div class="campo"><label for="p-an">Mes de análisis</label><input type="month" id="p-an"></div>
     </div>
-    <div class="editor">
-      <div class="barra"><span class="ed-tit" id="p-ed-tit">Insumos e indicadores</span><button class="link" id="p-reset" type="button" hidden>Restaurar lista original</button></div>
-      <div class="chips" id="p-chips"></div>
-      <div class="ed-add">
-        <input type="text" id="p-add" list="lista-productos" placeholder="Buscá un producto de la base para agregarlo…" autocomplete="off">
-        <button id="p-add-btn" type="button">Agregar</button>
+    <details class="personalizar" open>
+      <summary>Personalizar insumos <span class="sum-info" id="sum-peli"></span></summary>
+      <div class="editor" data-lista="peli">
+        <div class="barra"><span class="ed-tit"></span><button class="link ed-reset" type="button" hidden>Restaurar lista original</button></div>
+        <div class="chips"></div>
+        <div class="ed-add">
+          <input type="text" id="ed-peli" class="ed-input" list="lista-productos" placeholder="Buscá un producto de la base para agregarlo…" autocomplete="off">
+          <button class="ed-add-btn" type="button">Agregar</button>
+        </div>
       </div>
-      <datalist id="lista-productos"></datalist>
-    </div>
+    </details>
   </section>
 
   <section id="v-variacion" class="vista" hidden>
@@ -244,6 +271,7 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
 
 </div>
 
+<datalist id="lista-productos"></datalist>
 <script>
 // ============================================================
 // CONFIGURACIÓN (mismas listas que los notebooks)
@@ -407,9 +435,10 @@ function serieRelacion(insumo, producto){
 // ---------- FOTO ----------
 function calcularFoto(){
   const {ini,fin,an} = state.foto;
+  const PRODUCTOS = getLista("foto-prod"), INSUMOS = getLista("foto-ins");
   const celdas = {};
-  for (const p of FOTO.productos){
-    for (const i of FOTO.insumos){
+  for (const p of PRODUCTOS){
+    for (const i of INSUMOS){
       const rel = serieRelacion(i,p); if (!rel) continue;
       const hist = rel.filter(([f])=>f>=ini && f<=fin).map(x=>x[1]);
       if (hist.length < 6) continue;
@@ -420,12 +449,12 @@ function calcularFoto(){
       celdas[p+"||"+i] = {v:(pt[1]/prom-1)*100, prom, val:pt[1], fechaVal:pt[0], rel, insumo:i, producto:p};
     }
   }
-  const cols = FOTO.insumos.map(i=>{ const vs=FOTO.productos.map(p=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [i,vs.length?mean(vs):null]; })
+  const cols = INSUMOS.map(i=>{ const vs=PRODUCTOS.map(p=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [i,vs.length?mean(vs):null]; })
     .filter(x=>x[1]!==null).sort((a,b)=>a[1]-b[1]).map(x=>x[0]);
-  const filas = FOTO.productos.map(p=>{ const vs=cols.map(i=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [p,vs.length?mean(vs):null]; })
+  const filas = PRODUCTOS.map(p=>{ const vs=cols.map(i=>celdas[p+"||"+i]).filter(Boolean).map(c=>c.v); return [p,vs.length?mean(vs):null]; })
     .filter(x=>x[1]!==null).sort((a,b)=>a[1]-b[1]).map(x=>x[0]);
 
-  const todas = [...new Set([...FOTO.insumos,...FOTO.productos,DOLAR])].sort();
+  const todas = [...new Set([...INSUMOS,...PRODUCTOS,DOLAR])].sort();
   const faltantes = todas.filter(n=>!DB.nombres.has(n));
   const incompletas = [];
   for (const n of todas){
@@ -441,7 +470,7 @@ function calcularFoto(){
 function calcularPelicula(){
   const {sector,base,ini,fin,an} = state.peli;
   const cfg = SECTORES[sector];
-  const insumos = insumosPeli(sector).filter(i=>i!==base); // la relación de un producto consigo mismo siempre da 0%
+  const insumos = getLista("peli").filter(i=>i!==base); // la relación de un producto consigo mismo siempre da 0%
   const mes = Number(an.slice(5,7));
   const rels = {}, prom = {};
   for (const i of insumos){
@@ -516,7 +545,7 @@ function render(){
   if (esVar) return renderVariacion();
 
   RES = state.view==="foto" ? calcularFoto() : calcularPelicula();
-  if (RES.tipo==="pelicula") renderEditor();
+  renderEditores();
   if (RES.tipo==="foto"){
     const {ini,fin,an} = state.foto;
     $("gTitulo").textContent = `Relación insumos / productos en ${mesLargo(an.slice(0,7))}`;
@@ -698,12 +727,13 @@ bindMes("p-ini","peli","ini","ini"); bindMes("p-fin","peli","fin","fin"); bindMe
 bind("v-desde","vari","desde"); bind("v-hasta","vari","hasta");
 $("p-sec").addEventListener("change", e=>{
   state.peli.sector=e.target.value; state.peli.base=SECTORES[e.target.value].default;
+  PREFS.ui.sector=state.peli.sector; PREFS.ui.base=state.peli.base; guardarPrefs();
   state.sel=null; sincronizarControles(); render();
 });
-$("p-base").addEventListener("change", e=>{ state.peli.base=e.target.value; state.sel=null; render(); });
+$("p-base").addEventListener("change", e=>{ state.peli.base=e.target.value; PREFS.ui.base=state.peli.base; guardarPrefs(); state.sel=null; render(); });
 
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ location.hash=t.dataset.view; }));
-function leerHash(){ const h=location.hash.slice(1); state.view = ["pelicula","variacion"].includes(h)?h:"foto"; state.sel=null; render(); }
+function leerHash(){ const h=location.hash.slice(1); state.view = ["pelicula","variacion"].includes(h)?h:"foto"; if (DB){ PREFS.ui.view=state.view; guardarPrefs(); } state.sel=null; render(); }
 window.addEventListener("hashchange", leerHash);
 
 function elegir(td){
@@ -727,45 +757,97 @@ $("panelVar").addEventListener("click", e=>{
 });
 
 // ============================================================
-// INSUMOS EDITABLES DE LA PELÍCULA
-// Por defecto usa la lista de SECTORES; los cambios quedan guardados en este navegador.
+// PREFERENCIAS POR USUARIO (guardadas en este navegador, por usuario MEC)
+// listas: productos e insumos de la Foto, insumos de la Película por sector
+// ui: sector y producto base de la Película, última solapa
 // ============================================================
-const LS_INSUMOS = "agro-insumos";
-let INSUMOS_PELI = (()=>{ try{ return JSON.parse(localStorage.getItem(LS_INSUMOS)||"{}")||{}; }catch(e){ return {}; } })();
-function guardarInsumos(){ try{ localStorage.setItem(LS_INSUMOS, JSON.stringify(INSUMOS_PELI)); }catch(e){} }
-function insumosPeli(sector=state.peli.sector){ return (INSUMOS_PELI[sector] || SECTORES[sector].insumos).slice(); }
-function setInsumosPeli(lista){
-  const s = state.peli.sector, orig = SECTORES[s].insumos;
-  if (lista.length===orig.length && lista.every((x,i)=>x===orig[i])) delete INSUMOS_PELI[s];
-  else INSUMOS_PELI[s] = lista;
-  guardarInsumos(); state.sel=null; render();
+let PREFS = {foto:{}, peli:{}, ui:{}}, PREFS_KEY = null;
+function cargarPrefs(usuario){
+  PREFS_KEY = "agro-prefs:" + usuario.trim().toLowerCase();
+  let p = null;
+  try{ p = JSON.parse(localStorage.getItem(PREFS_KEY) || "null"); }catch(e){}
+  if (!p){
+    p = {};
+    // versión anterior: insumos de la Película guardados sin usuario
+    try{ const viejo = JSON.parse(localStorage.getItem("agro-insumos") || "null"); if (viejo) p.peli = viejo; }catch(e){}
+  }
+  PREFS = {foto:p.foto||{}, peli:p.peli||{}, ui:p.ui||{}};
+  const sec = PREFS.ui.sector;
+  if (SECTORES[sec]){
+    state.peli.sector = sec;
+    state.peli.base = SECTORES[sec].bases.includes(PREFS.ui.base) ? PREFS.ui.base : SECTORES[sec].default;
+  }
+  guardarPrefs();
 }
-function renderEditor(){
-  const s = state.peli.sector, lista = insumosPeli();
-  $("p-ed-tit").textContent = `Insumos e indicadores de ${SECTORES[s].nombre} (${lista.length})`;
-  $("p-reset").hidden = !INSUMOS_PELI[s];
-  $("p-chips").innerHTML = lista.map((n,i)=>{
-    const falta = DB && !DB.nombres.has(n), esBase = n===state.peli.base;
-    const tip = falta ? "No está en la base" : esBase ? "Es el producto base, no se grafica" : "";
-    return `<span class="ichip${falta?" falta":""}${esBase?" base":""}" title="${tip}">${esc(n)}<button type="button" data-quitar="${i}" aria-label="Quitar ${esc(n)}">×</button></span>`;
-  }).join("") || `<span class="vacio">No hay insumos. Agregá alguno desde el buscador.</span>`;
+function guardarPrefs(){ if (!PREFS_KEY) return; try{ localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); }catch(e){} }
+
+// ============================================================
+// LISTAS EDITABLES (Foto: productos e insumos; Película: insumos por sector)
+// ============================================================
+const LISTAS = {
+  "foto-prod": {
+    orig: ()=>FOTO.productos, leer: ()=>PREFS.foto.productos,
+    escribir: v=>{ if (v) PREFS.foto.productos=v; else delete PREFS.foto.productos; },
+    titulo: n=>`Productos · filas (${n})`, vacio:"No hay productos. Agregá alguno desde el buscador."
+  },
+  "foto-ins": {
+    orig: ()=>FOTO.insumos, leer: ()=>PREFS.foto.insumos,
+    escribir: v=>{ if (v) PREFS.foto.insumos=v; else delete PREFS.foto.insumos; },
+    titulo: n=>`Insumos · columnas (${n})`, vacio:"No hay insumos. Agregá alguno desde el buscador."
+  },
+  "peli": {
+    orig: ()=>SECTORES[state.peli.sector].insumos, leer: ()=>PREFS.peli[state.peli.sector],
+    escribir: v=>{ const s=state.peli.sector; if (v) PREFS.peli[s]=v; else delete PREFS.peli[s]; },
+    titulo: n=>`Insumos e indicadores de ${SECTORES[state.peli.sector].nombre} (${n})`,
+    vacio:"No hay insumos. Agregá alguno desde el buscador.", base: ()=>state.peli.base
+  }
+};
+function getLista(k){ return (LISTAS[k].leer() || LISTAS[k].orig()).slice(); }
+function setLista(k, lista){
+  const o = LISTAS[k].orig();
+  const igual = lista.length===o.length && lista.every((x,i)=>x===o[i]);
+  LISTAS[k].escribir(igual ? null : lista);
+  guardarPrefs(); state.sel=null; render();
 }
-function agregarInsumo(){
-  const inp = $("p-add"), txt = limpiar(inp.value); if (!txt || !DB) return;
+function renderEditores(){
+  document.querySelectorAll(".editor[data-lista]").forEach(el=>{
+    const k = el.dataset.lista, L = LISTAS[k], lista = getLista(k), base = L.base ? L.base() : null;
+    el.querySelector(".ed-tit").textContent = L.titulo(lista.length);
+    el.querySelector(".ed-reset").hidden = !L.leer();
+    el.querySelector(".chips").innerHTML = lista.map((n,i)=>{
+      const falta = DB && !DB.nombres.has(n), esBase = n===base;
+      const tip = falta ? "No está en la base" : esBase ? "Es el producto base, no se grafica" : "";
+      return `<span class="ichip${falta?" falta":""}${esBase?" base":""}" title="${tip}">${esc(n)}<button type="button" data-quitar="${i}" aria-label="Quitar ${esc(n)}">×</button></span>`;
+    }).join("") || `<span class="vacio">${L.vacio}</span>`;
+  });
+  const fp = getLista("foto-prod").length, fi = getLista("foto-ins").length;
+  const modFoto = PREFS.foto.productos || PREFS.foto.insumos;
+  $("sum-foto").textContent = `(${fp} productos · ${fi} insumos${modFoto ? " · personalizada" : ""})`;
+  $("sum-peli").textContent = `(${getLista("peli").length} insumos${PREFS.peli[state.peli.sector] ? " · personalizada" : ""})`;
+}
+function agregarALista(el){
+  const k = el.dataset.lista, inp = el.querySelector(".ed-input"), txt = limpiar(inp.value);
+  if (!txt || !DB) return;
   const nombre = DB.nombres.has(txt) ? txt : [...DB.nombres].find(n=>n.toLowerCase()===txt.toLowerCase());
   if (!nombre){ toast("Ese producto no está en la base. Elegilo de la lista que aparece al escribir."); return; }
-  const lista = insumosPeli();
+  const lista = getLista(k);
   inp.value = "";
   if (lista.includes(nombre)){ toast("Ya está en la lista"); return; }
-  setInsumosPeli([...lista, nombre]); toast(`Agregado: ${nombre}`);
+  setLista(k, [...lista, nombre]); toast(`Agregado: ${nombre}`);
+  el.querySelector(".ed-input").focus();
 }
-$("p-add-btn").addEventListener("click", agregarInsumo);
-$("p-add").addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); agregarInsumo(); } });
-$("p-chips").addEventListener("click", e=>{
-  const b = e.target.closest("[data-quitar]"); if (!b) return;
-  const l = insumosPeli(); l.splice(+b.dataset.quitar, 1); setInsumosPeli(l);
+document.addEventListener("click", e=>{
+  const el = e.target.closest(".editor[data-lista]"); if (!el) return;
+  const k = el.dataset.lista;
+  const q = e.target.closest("[data-quitar]");
+  if (q){ const l = getLista(k); l.splice(+q.dataset.quitar, 1); return setLista(k, l); }
+  if (e.target.closest(".ed-reset")){ LISTAS[k].escribir(null); guardarPrefs(); state.sel=null; render(); toast("Lista original restaurada"); return; }
+  if (e.target.closest(".ed-add-btn")) agregarALista(el);
 });
-$("p-reset").addEventListener("click", ()=>{ delete INSUMOS_PELI[state.peli.sector]; guardarInsumos(); state.sel=null; render(); });
+document.addEventListener("keydown", e=>{
+  if (e.key!=="Enter" || !e.target.classList.contains("ed-input")) return;
+  e.preventDefault(); agregarALista(e.target.closest(".editor"));
+});
 
 // ============================================================
 // DESCARGA DEL HEATMAP COMO IMAGEN (PNG)
@@ -958,7 +1040,9 @@ $("loginForm").addEventListener("submit", async e=>{
     try{ localStorage.setItem("agro-usuario", usuario); }catch(e){}
     $("lista-productos").innerHTML = [...DB.nombres].filter(n=>n && n!==DOLAR).sort((a,b)=>a.localeCompare(b,"es")).map(n=>`<option value="${esc(n)}"></option>`).join("");
     $("lg-pass").value=""; $("login").hidden=true;
+    cargarPrefs(usuario);
     fijarFechasPorDefecto();
+    if (!location.hash && PREFS.ui.view && PREFS.ui.view!=="foto") location.hash = PREFS.ui.view;
     state.sel=null; mostrarOrigen(); render(); toast("Datos de la base cargados");
   }catch(err){
     $("lg-err").textContent = err.message;
