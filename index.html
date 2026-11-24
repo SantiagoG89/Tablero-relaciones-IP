@@ -228,6 +228,10 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
       <div class="campo"><label for="p-ini">Promedio desde</label><input type="month" id="p-ini"></div>
       <div class="campo"><label for="p-fin">Promedio hasta</label><input type="month" id="p-fin"></div>
       <div class="sep"></div>
+      <div class="campo"><label for="p-vini">Mostrar desde</label><input type="month" id="p-vini"></div>
+      <div class="campo"><label for="p-vfin">Mostrar hasta</label><input type="month" id="p-vfin"></div>
+      <button class="link" id="p-vlink" type="button" hidden>Igualar al promedio</button>
+      <div class="sep"></div>
       <div class="campo"><label for="p-modo">Meses a mostrar</label>
         <select id="p-modo"><option value="mes">Mes de referencia</option><option value="todo">Todo el período</option></select></div>
       <div class="campo" id="p-an-campo"><label for="p-an">Mes de referencia</label><input type="month" id="p-an"></div>
@@ -321,7 +325,7 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 const state = {
   view:"foto",
   foto:{ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
-  peli:{sector:"agricultura",base:"Girasol (disp.)",modo:"mes",ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
+  peli:{sector:"agricultura",base:"Girasol (disp.)",modo:"mes",ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30",vini:"2016-06-01",vfin:"2026-06-30",vlink:true},
   vari:{desde:"2023-11",hasta:"2026-09",abiertos:new Set()},
   sel:null
 };
@@ -474,6 +478,7 @@ function calcularFoto(){
 // ---------- PELÍCULA ----------
 function calcularPelicula(){
   const {sector,base,ini,fin,an} = state.peli;
+  const vini = state.peli.vini || ini, vfin = state.peli.vfin || fin;
   const cfg = SECTORES[sector];
   const insumos = getLista("peli").filter(i=>i!==base); // la relación de un producto consigo mismo siempre da 0%
   const mes = Number(an.slice(5,7));
@@ -487,7 +492,7 @@ function calcularPelicula(){
   const relMap = Object.fromEntries(insumos.map(i=>[i,new Map(rels[i])]));
   const columnas = new Map();
   for (const f of DB.fechas){
-    if (f<ini || f>fin) continue;
+    if (f<vini || f>vfin) continue;   // meses que se muestran (el promedio usa ini–fin)
     if (state.peli.modo!=="todo" && Number(f.slice(5,7))!==mes) continue;
     const col = {fecha:f, desv:{}, abs:{}};
     for (const i of insumos){
@@ -507,7 +512,7 @@ function calcularPelicula(){
   }
   const faltantes = [...insumos,base,DOLAR].filter(n=>!DB.nombres.has(n));
   return {tipo:"pelicula", todo:state.peli.modo==="todo", filas, cols:keys, foco, prom, columnas, cfg, base, mes,
-    cell:(r,c)=>{ const col=columnas.get(c); const v=col.desv[r]; return v===null?null:{v, val:col.abs[r], prom:prom[r], fechaVal:col.fecha, rel:rels[r], insumo:r, producto:base}; },
+    cell:(r,c)=>{ const col=columnas.get(c); if (!col || !(r in col.desv)) return null; const v=col.desv[r]; return v===null?null:{v, val:col.abs[r], prom:prom[r], fechaVal:col.fecha, rel:rels[r], insumo:r, producto:base}; },
     faltantes, incompletas:[]};
 }
 
@@ -558,14 +563,15 @@ function render(){
     $("gTitulo").textContent = `Relación insumos / productos en ${mesLargo(an.slice(0,7))}`;
     $("gSub").textContent = `Desvío % respecto del promedio de ${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}, en dólar oficial`;
   } else {
-    const {ini,fin} = state.peli;
+    const {ini,fin,vini,vfin} = state.peli;
     const per = `${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}`;
+    const muestra = (vini.slice(0,7)!==ini.slice(0,7) || vfin.slice(0,7)!==fin.slice(0,7)) ? ` Se muestran ${mesLargo(vini.slice(0,7))} a ${mesLargo(vfin.slice(0,7))}.` : "";
     if (RES.todo){
       $("gTitulo").textContent = `Poder de compra de ${RES.base} mes a mes · ${RES.cfg.nombre}`;
-      $("gSub").textContent = `Desvío % de cada mes respecto del promedio general de ${per}, en dólar oficial. Ordenado por el último mes (${RES.foco||"–"}).`;
+      $("gSub").textContent = `Desvío % de cada mes respecto del promedio general de ${per}, en dólar oficial. Ordenado por el último mes (${RES.foco||"–"}).${muestra}`;
     } else {
       $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
-      $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+      $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.${muestra}`;
     }
   }
 
@@ -836,7 +842,7 @@ function descargarExcel(){
         filas:[["Insumo",`Promedio ${etiqueta}`], ...RES.filas.map(r=>[r, numOk(RES.prom[r])])]});
       hojas.push(hojaParametros([["Vista","Película"],["Sector",RES.cfg.nombre],["Producto base",RES.base],
         ["Meses mostrados", RES.todo ? "Todo el período" : `Mes de referencia: ${MESES[RES.mes-1]}`],
-        ["Período del promedio",etiqueta],["Ordenado por",RES.foco||"–"],
+        ["Período del promedio",etiqueta],["Período mostrado",`${mesLargo(state.peli.vini.slice(0,7))} a ${mesLargo(state.peli.vfin.slice(0,7))}`],["Ordenado por",RES.foco||"–"],
         ["Relación",`Unidades de ${RES.base} necesarias para comprar una unidad de cada insumo`]]));
       archivo = `pelicula_${state.peli.sector}_${slug(RES.base)}_${RES.todo?"todo_el_periodo":per.an.slice(0,7)}.xlsx`;
     }
@@ -851,6 +857,7 @@ function descargarExcel(){
 function sincronizarControles(){
   $("f-ini").value=state.foto.ini.slice(0,7); $("f-fin").value=state.foto.fin.slice(0,7); $("f-an").value=state.foto.an.slice(0,7);
   $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini.slice(0,7); $("p-fin").value=state.peli.fin.slice(0,7); $("p-an").value=state.peli.an.slice(0,7);
+  $("p-vini").value=state.peli.vini.slice(0,7); $("p-vfin").value=state.peli.vfin.slice(0,7); $("p-vlink").hidden = state.peli.vlink;
   $("p-modo").value=state.peli.modo; $("p-an-campo").hidden = state.peli.modo==="todo";
   $("v-desde").value=state.vari.desde; $("v-hasta").value=state.vari.hasta;
   const cfg = SECTORES[state.peli.sector], sel=$("p-base");
@@ -864,6 +871,19 @@ function bindMes(id, obj, key, extremo){ $(id).addEventListener("change", e=>{ c
   state[obj][key] = extremo==="ini" ? ym+"-01" : ultimoDia(ym); state.sel=null; render(); }); }
 bindMes("f-ini","foto","ini","ini"); bindMes("f-fin","foto","fin","fin"); bindMes("f-an","foto","an","fin");
 bindMes("p-ini","peli","ini","ini"); bindMes("p-fin","peli","fin","fin"); bindMes("p-an","peli","an","fin");
+// Meses que se muestran: siguen al período del promedio hasta que el usuario los cambia
+["p-ini","p-fin"].forEach(id=>$(id).addEventListener("change", ()=>{
+  if (!state.peli.vlink) return;
+  state.peli.vini = state.peli.ini; state.peli.vfin = state.peli.fin; sincronizarControles(); render();
+}));
+bindMes("p-vini","peli","vini","ini"); bindMes("p-vfin","peli","vfin","fin");
+["p-vini","p-vfin"].forEach(id=>$(id).addEventListener("change", ()=>{
+  state.peli.vlink = state.peli.vini.slice(0,7)===state.peli.ini.slice(0,7) && state.peli.vfin.slice(0,7)===state.peli.fin.slice(0,7);
+  sincronizarControles();
+}));
+$("p-vlink").addEventListener("click", ()=>{
+  Object.assign(state.peli, {vini:state.peli.ini, vfin:state.peli.fin, vlink:true}); state.sel=null; sincronizarControles(); render();
+});
 bind("v-desde","vari","desde"); bind("v-hasta","vari","hasta");
 $("p-sec").addEventListener("change", e=>{
   state.peli.sector=e.target.value; state.peli.base=SECTORES[e.target.value].default;
@@ -1105,11 +1125,11 @@ function fijarFechasPorDefecto(){
   const ym = ultimoMesCargado(), [y,m] = ym.split("-");
   const ini = `${Number(y)-10}-${m}-01`, fin = ultimoDia(ym);
   state.foto = {ini, fin, an:fin};
-  Object.assign(state.peli, {ini, fin, an:fin});
+  Object.assign(state.peli, {ini, fin, an:fin, vini:ini, vfin:fin, vlink:true});
   state.vari.hasta = ym;
   if (state.vari.desde >= ym) state.vari.desde = `${Number(y)-1}-${m}`;
   const minYM = DB.desde.slice(0,7), maxYM = DB.hasta.slice(0,7);
-  for (const id of ["f-ini","f-fin","f-an","p-ini","p-fin","p-an","v-desde","v-hasta"]){ $(id).min=minYM; $(id).max=maxYM; }
+  for (const id of ["f-ini","f-fin","f-an","p-ini","p-fin","p-an","p-vini","p-vfin","v-desde","v-hasta"]){ $(id).min=minYM; $(id).max=maxYM; }
   sincronizarControles();
 }
 
