@@ -74,6 +74,8 @@ table.hm thead th.v span{writing-mode:vertical-rl;transform:rotate(180deg);displ
 table.hm thead th.h{text-align:center;font-family:var(--f-mono);font-size:11px;white-space:nowrap}
 td.c{min-width:40px;height:28px;text-align:center;font-family:var(--f-mono);font-size:11px;font-weight:600;border-radius:3px;cursor:pointer;padding:0 3px}
 td.c.na{background:var(--empty);cursor:default}
+table.hm.compacto td.c{min-width:30px;height:26px;font-size:10px;padding:0 2px}
+table.hm.compacto thead th.v span{max-height:70px;font-size:11px}
 td.c.sel{outline:2px solid var(--ink);outline-offset:1px}
 .detalle{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;border-top:1px solid var(--line);padding-top:12px}
 @media (max-width:720px){.detalle{grid-template-columns:1fr}}
@@ -226,7 +228,9 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
       <div class="campo"><label for="p-ini">Promedio desde</label><input type="month" id="p-ini"></div>
       <div class="campo"><label for="p-fin">Promedio hasta</label><input type="month" id="p-fin"></div>
       <div class="sep"></div>
-      <div class="campo"><label for="p-an">Mes de análisis</label><input type="month" id="p-an"></div>
+      <div class="campo"><label for="p-modo">Meses a mostrar</label>
+        <select id="p-modo"><option value="mes">Mes de referencia</option><option value="todo">Todo el período</option></select></div>
+      <div class="campo"><label for="p-an" id="p-an-label">Mes de referencia</label><input type="month" id="p-an"></div>
     </div>
     <details class="personalizar" open>
       <summary>Personalizar insumos <span class="sum-info" id="sum-peli"></span></summary>
@@ -316,7 +320,7 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 const state = {
   view:"foto",
   foto:{ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
-  peli:{sector:"agricultura",base:"Girasol (disp.)",ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
+  peli:{sector:"agricultura",base:"Girasol (disp.)",modo:"mes",ini:"2016-06-01",fin:"2026-06-30",an:"2026-06-30"},
   vari:{desde:"2023-11",hasta:"2026-09",abiertos:new Set()},
   sel:null
 };
@@ -482,16 +486,18 @@ function calcularPelicula(){
   const relMap = Object.fromEntries(insumos.map(i=>[i,new Map(rels[i])]));
   const columnas = new Map();
   for (const f of DB.fechas){
-    if (f<ini || f>fin || Number(f.slice(5,7))!==mes) continue;
+    if (f<ini || f>fin) continue;
+    if (state.peli.modo!=="todo" && Number(f.slice(5,7))!==mes) continue;
     const col = {fecha:f, desv:{}, abs:{}};
     for (const i of insumos){
       const r = relMap[i].get(f);
       col.abs[i] = r === undefined ? null : r;
       col.desv[i] = (r === undefined || !prom[i] || !Number.isFinite(prom[i])) ? null : (r/prom[i]-1)*100;
     }
-    columnas.set(f.slice(0,7), col);
+    // una columna por mes; una fecha sin datos (p. ej. un dólar diario) no pisa a otra del mismo mes que sí tiene
+    if (insumos.some(i=>col.desv[i]!==null) || !columnas.has(f.slice(0,7))) columnas.set(f.slice(0,7), col);
   }
-  const keys = [...columnas.keys()];
+  const keys = [...columnas.keys()].filter(k=>insumos.some(i=>columnas.get(k).desv[i]!==null));
   let filas = insumos.filter(i=>keys.some(k=>columnas.get(k).desv[i]!==null));
   const foco = keys.includes(an.slice(0,7)) ? an.slice(0,7) : keys[keys.length-1];
   if (foco){
@@ -499,7 +505,7 @@ function calcularPelicula(){
       .sort((a,b)=> (a[1]===null)-(b[1]===null) || (a[1]??0)-(b[1]??0) || a[2]-b[2]).map(x=>x[0]);
   }
   const faltantes = [...insumos,base,DOLAR].filter(n=>!DB.nombres.has(n));
-  return {tipo:"pelicula", filas, cols:keys, foco, prom, columnas, cfg, base, mes,
+  return {tipo:"pelicula", todo:state.peli.modo==="todo", filas, cols:keys, foco, prom, columnas, cfg, base, mes,
     cell:(r,c)=>{ const col=columnas.get(c); const v=col.desv[r]; return v===null?null:{v, val:col.abs[r], prom:prom[r], fechaVal:col.fecha, rel:rels[r], insumo:r, producto:base}; },
     faltantes, incompletas:[]};
 }
@@ -552,16 +558,22 @@ function render(){
     $("gSub").textContent = `Desvío % respecto del promedio de ${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}, en dólar oficial`;
   } else {
     const {ini,fin} = state.peli;
-    $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
-    $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+    const per = `${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}`;
+    if (RES.todo){
+      $("gTitulo").textContent = `Poder de compra de ${RES.base} mes a mes · ${RES.cfg.nombre}`;
+      $("gSub").textContent = `Desvío % de cada mes respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+    } else {
+      $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
+      $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+    }
   }
 
   const hm = $("hm");
   if (!RES.filas.length || !RES.cols.length){
     hm.innerHTML = `<p class="vacio">No hay datos suficientes para estos parámetros. Revisá las fechas o los avisos de abajo.</p>`;
   } else {
-    const vertical = RES.tipo==="foto";
-    let h = `<table class="hm"><thead><tr><th class="rowh"></th>`;
+    const vertical = RES.tipo==="foto" || RES.todo;
+    let h = `<table class="hm${RES.todo?" compacto":""}"><thead><tr><th class="rowh"></th>`;
     for (const c of RES.cols){
       h += vertical ? `<th class="v" title="${esc(c)}"><span>${esc(c)}</span></th>` : `<th class="h">${esc(c)}</th>`;
     }
@@ -712,6 +724,7 @@ function tsv(tipo){
 function sincronizarControles(){
   $("f-ini").value=state.foto.ini.slice(0,7); $("f-fin").value=state.foto.fin.slice(0,7); $("f-an").value=state.foto.an.slice(0,7);
   $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini.slice(0,7); $("p-fin").value=state.peli.fin.slice(0,7); $("p-an").value=state.peli.an.slice(0,7);
+  $("p-modo").value=state.peli.modo; $("p-an-label").textContent = state.peli.modo==="todo" ? "Ordenar según el mes" : "Mes de referencia";
   $("v-desde").value=state.vari.desde; $("v-hasta").value=state.vari.hasta;
   const cfg = SECTORES[state.peli.sector], sel=$("p-base");
   sel.innerHTML = cfg.bases.map(g=>`<option${g===state.peli.base?" selected":""}>${esc(g)}</option>`).join("");
@@ -730,6 +743,7 @@ $("p-sec").addEventListener("change", e=>{
   PREFS.ui.sector=state.peli.sector; PREFS.ui.base=state.peli.base; guardarPrefs();
   state.sel=null; sincronizarControles(); render();
 });
+$("p-modo").addEventListener("change", e=>{ state.peli.modo=e.target.value; PREFS.ui.modo=state.peli.modo; guardarPrefs(); state.sel=null; sincronizarControles(); render(); });
 $("p-base").addEventListener("change", e=>{ state.peli.base=e.target.value; PREFS.ui.base=state.peli.base; guardarPrefs(); state.sel=null; render(); });
 
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ location.hash=t.dataset.view; }));
@@ -777,6 +791,7 @@ function cargarPrefs(usuario){
     state.peli.sector = sec;
     state.peli.base = SECTORES[sec].bases.includes(PREFS.ui.base) ? PREFS.ui.base : SECTORES[sec].default;
   }
+  state.peli.modo = PREFS.ui.modo==="todo" ? "todo" : "mes";
   guardarPrefs();
 }
 function guardarPrefs(){ if (!PREFS_KEY) return; try{ localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); }catch(e){} }
@@ -860,7 +875,7 @@ async function descargarImagen(){
   if (!RES || !RES.filas.length || !RES.cols.length){ toast("No hay heatmap para descargar"); return; }
   try{ await Promise.all(["400 12px","600 12px","800 19px"].map(f=>document.fonts.load(`${f} "Roboto Condensed"`))); }catch(e){}
   const [imgAgro, imgCrea] = await Promise.all(["img/agroseries.png","img/crea.png"].map(cargarImg));
-  const S=2, PAD=28, GAP=2, CH=26, CW = RES.tipo==="foto" ? 46 : 54;
+  const S=2, PAD=28, GAP=2, CH=26, CW = RES.tipo==="foto" ? 46 : RES.todo ? 32 : 54;
   const C = {bg:"#ffffff", ink:"#17201e", muted:"#5a6864", na:"#e6ebe9"};
   const F = {
     tit:"800 19px 'Roboto Condensed', 'Arial Narrow', sans-serif", sub:"400 13px 'Roboto Condensed', 'Arial Narrow', sans-serif",
@@ -872,7 +887,7 @@ async function descargarImagen(){
   const titulo = $("gTitulo").textContent, sub = $("gSub").textContent;
   const ley1 = "Verde: el insumo cuesta menos producto que el promedio · Rojo: cuesta más";
   const ley2 = "Fuente: Agroseries · CREA. Precios convertidos a dólar oficial.";
-  const vertical = RES.tipo==="foto";
+  const vertical = RES.tipo==="foto" || RES.todo;
   const rowW = Math.max(...RES.filas.map(r=>ancho(F.lab,r))) + 14;
   const headH = vertical ? Math.max(...RES.cols.map(c=>ancho(F.col,c))) + 14 : 24;
   const gridW = RES.cols.length*(CW+GAP), gridH = RES.filas.length*(CH+GAP);
@@ -936,7 +951,7 @@ async function descargarImagen(){
 
   const nombre = RES.tipo==="foto"
     ? `foto_relaciones_${state.foto.an.slice(0,7)}.png`
-    : `pelicula_${state.peli.sector}_${slug(RES.base)}_${state.peli.an.slice(0,7)}.png`;
+    : `pelicula_${state.peli.sector}_${slug(RES.base)}_${RES.todo?"todo_el_periodo":state.peli.an.slice(0,7)}.png`;
   cv.toBlob(b=>{
     if (!b){ toast("No se pudo generar la imagen"); return; }
     const u = URL.createObjectURL(b), a = document.createElement("a");
