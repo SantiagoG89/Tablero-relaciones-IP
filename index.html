@@ -230,7 +230,7 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
       <div class="sep"></div>
       <div class="campo"><label for="p-modo">Meses a mostrar</label>
         <select id="p-modo"><option value="mes">Mes de referencia</option><option value="todo">Todo el período</option></select></div>
-      <div class="campo"><label for="p-an" id="p-an-label">Mes de referencia</label><input type="month" id="p-an"></div>
+      <div class="campo" id="p-an-campo"><label for="p-an">Mes de referencia</label><input type="month" id="p-an"></div>
     </div>
     <details class="personalizar" open>
       <summary>Personalizar insumos <span class="sum-info" id="sum-peli"></span></summary>
@@ -249,6 +249,7 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:6px;pad
     <div class="controles">
       <div class="campo"><label for="v-desde">Mes inicial</label><input type="month" id="v-desde"></div>
       <div class="campo"><label for="v-hasta">Mes final</label><input type="month" id="v-hasta"></div>
+      <button id="v-xlsx" type="button">Descargar Excel</button>
       <span class="vacio">Precios en dólar oficial. Solo cuentan los artículos con precio en los dos meses.</span>
     </div>
   </section>
@@ -499,7 +500,7 @@ function calcularPelicula(){
   }
   const keys = [...columnas.keys()].filter(k=>insumos.some(i=>columnas.get(k).desv[i]!==null));
   let filas = insumos.filter(i=>keys.some(k=>columnas.get(k).desv[i]!==null));
-  const foco = keys.includes(an.slice(0,7)) ? an.slice(0,7) : keys[keys.length-1];
+  const foco = (state.peli.modo!=="todo" && keys.includes(an.slice(0,7))) ? an.slice(0,7) : keys[keys.length-1];
   if (foco){
     filas = filas.map((i,ix)=>[i,columnas.get(foco).desv[i],ix])
       .sort((a,b)=> (a[1]===null)-(b[1]===null) || (a[1]??0)-(b[1]??0) || a[2]-b[2]).map(x=>x[0]);
@@ -561,7 +562,7 @@ function render(){
     const per = `${mesLargo(ini.slice(0,7))} a ${mesLargo(fin.slice(0,7))}`;
     if (RES.todo){
       $("gTitulo").textContent = `Poder de compra de ${RES.base} mes a mes · ${RES.cfg.nombre}`;
-      $("gSub").textContent = `Desvío % de cada mes respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
+      $("gSub").textContent = `Desvío % de cada mes respecto del promedio general de ${per}, en dólar oficial. Ordenado por el último mes (${RES.foco||"–"}).`;
     } else {
       $("gTitulo").textContent = `Poder de compra de ${RES.base} en los meses de ${MESES[RES.mes-1]} · ${RES.cfg.nombre}`;
       $("gSub").textContent = `Desvío % de cada ${MESES[RES.mes-1]} respecto del promedio general de ${per}, en dólar oficial. Ordenado por ${RES.foco||"–"}.`;
@@ -593,8 +594,8 @@ function render(){
   }
 
   $("botonesCopia").innerHTML = RES.tipo==="foto"
-    ? `<button class="primary" data-img="1">Descargar imagen</button><button data-copia="desv">Copiar matriz</button>`
-    : `<button class="primary" data-img="1">Descargar imagen</button><button data-copia="desv">Copiar desvíos</button><button data-copia="abs">Copiar relaciones absolutas</button>`;
+    ? `<button class="primary" data-img="1">Descargar imagen</button><button data-xlsx="1">Descargar Excel</button>`
+    : `<button class="primary" data-img="1">Descargar imagen</button><button data-xlsx="1">Descargar Excel</button>`;
 
   if (!state.sel || !RES.cell(state.sel[0],state.sel[1])){
     state.sel = null;
@@ -688,7 +689,6 @@ function renderVariacion(){
     return `<div class="panel">
       <div class="barra">
         <div class="titulo-graf"><h2>${esc(t.titulo)}</h2><p>Variación % promedio en USD oficial, ${mesLargo(desde)} vs ${mesLargo(hasta)}</p></div>
-        <button data-copiavar="${t.id}">Copiar tabla</button>
       </div>
       ${t.filas.length ? `<div><div class="vhead"><span>Grupo</span><span>Variación promedio</span><span>%</span></div>${filas}</div>
       <span class="vacio">Tocá un grupo para ver los artículos incluidos.</span>`
@@ -696,26 +696,153 @@ function renderVariacion(){
     </div>`;
   }).join("");
 }
-function tsvVariacion(id){
-  const t = TABLAS_VAR.find(x=>x.id===id); const {desde,hasta}=state.vari;
-  const L = ["Grupo\tVariación promedio %\tCantidad de artículos"];
-  for (const f of t.filas) L.push(`${f.grupo}\t${numXL(f.v)}\t${f.n}`);
-  L.push("", `Grupo\tArtículo\t${desde} (USD)\t${hasta} (USD)\tVariación %`);
-  for (const f of t.filas) for (const a of f.arts) L.push(`${f.grupo}\t${a.nombre}\t${numXL(a.a)}\t${numXL(a.b)}\t${numXL(a.v)}`);
-  return L.join("\n");
+// ============================================================
+// DESCARGA EN EXCEL (.xlsx) — generado en el navegador, sin librerías externas
+// ============================================================
+const FMT_PCT = "0.0", FMT_REL = "#,##0.0000", FMT_USD = "#,##0.00";
+const ESTILO_XLSX = {[FMT_PCT]:2, [FMT_REL]:3, [FMT_USD]:4};
+const numOk = v => (v===null || v===undefined || !Number.isFinite(v)) ? null : v;
+const xmlEsc = t => String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,"");
+function colLetra(c){ let s=""; c++; while (c>0){ const m=(c-1)%26; s=String.fromCharCode(65+m)+s; c=Math.floor((c-1)/26); } return s; }
+
+function hojaXML(filas, formato, fijar){
+  const ncol = Math.max(...filas.map(f=>f.length));
+  const anchos = Array.from({length:ncol}, (_,c)=>Math.min(45, Math.max(9, ...filas.map(f=>String(f[c] ?? "").length + 2))));
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">'
+    + (fijar ? '<pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight" state="frozen"/>' : '')
+    + '</sheetView></sheetViews><cols>';
+  anchos.forEach((w,c)=>{ x += `<col min="${c+1}" max="${c+1}" width="${w}" customWidth="1"/>`; });
+  x += '</cols><sheetData>';
+  filas.forEach((f,r)=>{
+    x += `<row r="${r+1}">`;
+    f.forEach((v,c)=>{
+      if (v===null || v===undefined || v==="") return;
+      const ref = colLetra(c)+(r+1);
+      if (typeof v==="number"){
+        if (!Number.isFinite(v)) return;
+        const z = formato ? formato(r,c) : null;
+        x += `<c r="${ref}"${z?` s="${ESTILO_XLSX[z]}"`:""}><v>${v}</v></c>`;
+      } else {
+        x += `<c r="${ref}" t="inlineStr"${r===0?' s="1"':""}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+      }
+    });
+    x += '</row>';
+  });
+  return x + '</sheetData></worksheet>';
 }
 
-function tsv(tipo){
-  const head = [RES.tipo==="foto"?"Producto":"Insumo", ...RES.cols];
-  const lines = [head.join("\t")];
-  for (const r of RES.filas){
-    lines.push([r, ...RES.cols.map(c=>{
-      if (tipo==="abs") return numXL(RES.columnas.get(c).abs[r]);
-      const cell=RES.cell(r,c); return cell?numXL(cell.v):"";
-    })].join("\t"));
+const XLSX_ESTILOS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+ + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+ + `<numFmts count="3"><numFmt numFmtId="164" formatCode="${FMT_PCT}"/><numFmt numFmtId="165" formatCode="${FMT_REL}"/><numFmt numFmtId="166" formatCode="${FMT_USD}"/></numFmts>`
+ + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+ + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+ + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+ + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+ + '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+ + '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+ + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+ + '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+ + '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+ + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+// ZIP sin compresión (formato que usa .xlsx)
+const CRC_T = (()=>{ const t=new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c=0xFFFFFFFF; for (let i=0;i<b.length;i++) c = CRC_T[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function armarZip(archivos, tipo){
+  const enc = new TextEncoder(), partes = [], central = []; let off = 0;
+  for (const a of archivos){
+    const nom = enc.encode(a.nombre), dat = enc.encode(a.texto), crc = crc32(dat);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,0,true); h.setUint16(12,0x21,true); h.setUint32(14,crc,true); h.setUint32(18,dat.length,true);
+    h.setUint32(22,dat.length,true); h.setUint16(26,nom.length,true); h.setUint16(28,0,true);
+    partes.push(new Uint8Array(h.buffer), nom, dat);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true);
+    c.setUint16(10,0,true); c.setUint16(12,0,true); c.setUint16(14,0x21,true); c.setUint32(16,crc,true);
+    c.setUint32(20,dat.length,true); c.setUint32(24,dat.length,true); c.setUint16(28,nom.length,true);
+    c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), nom);
+    off += 30 + nom.length + dat.length;
   }
-  if (tipo==="abs"){ lines.push("","Insumo\tPromedio período (USD)"); for (const r of RES.filas) lines.push(r+"\t"+numXL(RES.prom[r])); }
-  return lines.join("\n");
+  const tamC = central.reduce((s,p)=>s+p.length,0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,archivos.length,true); e.setUint16(10,archivos.length,true);
+  e.setUint32(12,tamC,true); e.setUint32(16,off,true);
+  return new Blob([...partes, ...central, new Uint8Array(e.buffer)], {type:tipo});
+}
+function libroXLSX(hojas){
+  const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const CT = "application/vnd.openxmlformats-officedocument.spreadsheetml";
+  const arch = [
+    {nombre:"[Content_Types].xml", texto:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+      + `<Override PartName="/xl/workbook.xml" ContentType="${CT}.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="${CT}.styles+xml"/>`
+      + hojas.map((h,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="${CT}.worksheet+xml"/>`).join("") + '</Types>'},
+    {nombre:"_rels/.rels", texto:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + `<Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {nombre:"xl/workbook.xml", texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${R}"><sheets>`
+      + hojas.map((h,i)=>`<sheet name="${xmlEsc(h.nombre.replace(/[\[\]:*?\/\\]/g,"").slice(0,31))}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("") + '</sheets></workbook>'},
+    {nombre:"xl/_rels/workbook.xml.rels", texto:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + hojas.map((h,i)=>`<Relationship Id="rId${i+1}" Type="${R}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")
+      + `<Relationship Id="rId${hojas.length+1}" Type="${R}/styles" Target="styles.xml"/></Relationships>`},
+    {nombre:"xl/styles.xml", texto:XLSX_ESTILOS},
+    ...hojas.map((h,i)=>({nombre:`xl/worksheets/sheet${i+1}.xml`, texto:hojaXML(h.filas, h.formato, h.fijar!==false)}))
+  ];
+  return armarZip(arch, `${CT}.sheet`);
+}
+function bajarBlob(blob, nombre){
+  const u = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href=u; a.download=nombre; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u), 3000);
+}
+function hojaParametros(pares){
+  return {nombre:"Parámetros", fijar:false, filas:[["Parámetro","Valor"], ...pares,
+    ["Precios","Convertidos a dólar oficial"], ["Fuente","Agroseries · CREA"], ["Descargado", new Date().toLocaleString("es-AR")]]};
+}
+
+function descargarExcel(){
+  const hojas = []; let archivo;
+  if (state.view==="variacion"){
+    const {desde,hasta} = state.vari;
+    const nombres = {insumos:["Resumen Insumos","Detalle Insumos"], productos:["Productos y Hacienda","Detalle Hacienda"]};
+    for (const t of TABLAS_VAR){
+      hojas.push({nombre:nombres[t.id][0], formato:(r,c)=>c===1?FMT_PCT:null,
+        filas:[["Grupo","Variación promedio %","Cantidad de artículos"], ...t.filas.map(f=>[f.grupo, numOk(f.v), f.n])]});
+      hojas.push({nombre:nombres[t.id][1], formato:(r,c)=>c===4?FMT_PCT:(c>=2?FMT_USD:null),
+        filas:[["Grupo","Artículo",`${desde} (USD)`,`${hasta} (USD)`,"Variación %"], ...t.filas.flatMap(f=>f.arts.map(a=>[f.grupo, a.nombre, numOk(a.a), numOk(a.b), numOk(a.v)]))]});
+    }
+    hojas.push(hojaParametros([["Vista","Variación por grupo"],["Mes inicial",mesLargo(desde)],["Mes final",mesLargo(hasta)]]));
+    archivo = `variacion_precios_${desde}_${hasta}.xlsx`;
+  } else {
+    if (!RES || !RES.filas.length || !RES.cols.length){ toast("No hay datos para descargar"); return; }
+    const foto = RES.tipo==="foto", per = foto ? state.foto : state.peli;
+    const etiqueta = `${mesLargo(per.ini.slice(0,7))} a ${mesLargo(per.fin.slice(0,7))}`;
+    const cab = [foto ? "Producto" : "Insumo", ...RES.cols];
+    const matriz = campo => [cab, ...RES.filas.map(r=>[r, ...RES.cols.map(c=>{ const x=RES.cell(r,c); return x ? numOk(x[campo]) : null; })])];
+    if (foto){
+      hojas.push({nombre:"Matriz Desvíos %", filas:matriz("v"), formato:(r,c)=>c>0?FMT_PCT:null});
+      hojas.push({nombre:"Relación en el mes", filas:matriz("val"), formato:(r,c)=>c>0?FMT_REL:null});
+      hojas.push({nombre:"Promedio del período", filas:matriz("prom"), formato:(r,c)=>c>0?FMT_REL:null});
+      hojas.push(hojaParametros([["Vista","Foto"],["Mes de la foto",mesLargo(per.an.slice(0,7))],["Período del promedio",etiqueta],
+        ["Relación","Unidades de producto (fila) necesarias para comprar una unidad de insumo (columna)"]]));
+      archivo = `foto_relaciones_${per.an.slice(0,7)}.xlsx`;
+    } else {
+      hojas.push({nombre:"Desvíos %", filas:matriz("v"), formato:(r,c)=>c>0?FMT_PCT:null});
+      hojas.push({nombre:"Relaciones Absolutas", formato:(r,c)=>c>0?FMT_REL:null,
+        filas:[cab, ...RES.filas.map(r=>[r, ...RES.cols.map(c=>numOk(RES.columnas.get(c).abs[r]))])]});
+      hojas.push({nombre:"Promedio Periodo", formato:(r,c)=>c>0?FMT_REL:null,
+        filas:[["Insumo",`Promedio ${etiqueta}`], ...RES.filas.map(r=>[r, numOk(RES.prom[r])])]});
+      hojas.push(hojaParametros([["Vista","Película"],["Sector",RES.cfg.nombre],["Producto base",RES.base],
+        ["Meses mostrados", RES.todo ? "Todo el período" : `Mes de referencia: ${MESES[RES.mes-1]}`],
+        ["Período del promedio",etiqueta],["Ordenado por",RES.foco||"–"],
+        ["Relación",`Unidades de ${RES.base} necesarias para comprar una unidad de cada insumo`]]));
+      archivo = `pelicula_${state.peli.sector}_${slug(RES.base)}_${RES.todo?"todo_el_periodo":per.an.slice(0,7)}.xlsx`;
+    }
+  }
+  bajarBlob(libroXLSX(hojas), archivo);
+  toast("Excel descargado");
 }
 
 // ============================================================
@@ -724,7 +851,7 @@ function tsv(tipo){
 function sincronizarControles(){
   $("f-ini").value=state.foto.ini.slice(0,7); $("f-fin").value=state.foto.fin.slice(0,7); $("f-an").value=state.foto.an.slice(0,7);
   $("p-sec").value=state.peli.sector; $("p-ini").value=state.peli.ini.slice(0,7); $("p-fin").value=state.peli.fin.slice(0,7); $("p-an").value=state.peli.an.slice(0,7);
-  $("p-modo").value=state.peli.modo; $("p-an-label").textContent = state.peli.modo==="todo" ? "Ordenar según el mes" : "Mes de referencia";
+  $("p-modo").value=state.peli.modo; $("p-an-campo").hidden = state.peli.modo==="todo";
   $("v-desde").value=state.vari.desde; $("v-hasta").value=state.vari.hasta;
   const cfg = SECTORES[state.peli.sector], sel=$("p-base");
   sel.innerHTML = cfg.bases.map(g=>`<option${g===state.peli.base?" selected":""}>${esc(g)}</option>`).join("");
@@ -761,11 +888,10 @@ $("hm").addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.pre
 $("botonesCopia").addEventListener("click", e=>{
   const b=e.target.closest("button"); if(!b) return;
   if (b.dataset.img) return descargarImagen();
-  copiar(tsv(b.dataset.copia), "Copiado. Pegalo en Excel o Google Sheets.");
+  if (b.dataset.xlsx) return descargarExcel();
 });
+$("v-xlsx").addEventListener("click", descargarExcel);
 $("panelVar").addEventListener("click", e=>{
-  const c=e.target.closest("[data-copiavar]");
-  if (c) return copiar(tsvVariacion(c.dataset.copiavar), "Copiado. Pegalo en Excel o Google Sheets.");
   const r=e.target.closest(".vrow"); if(!r) return;
   const k=r.dataset.k, ab=state.vari.abiertos; ab.has(k)?ab.delete(k):ab.add(k); renderVariacion();
 });
